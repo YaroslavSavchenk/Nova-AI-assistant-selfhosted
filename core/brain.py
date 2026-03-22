@@ -6,6 +6,7 @@ for cloud APIs (Claude, OpenAI) later without rewriting the core loop.
 """
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -108,7 +109,10 @@ class OllamaProvider(LLMProvider):
             ]
             return LLMResponse(tool_calls=tool_calls)
 
-        return LLMResponse(content=msg.content)
+        # Strip <think>...</think> blocks that Qwen3 emits in thinking mode
+        content = msg.content or ""
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return LLMResponse(content=content)
 
 
 # ---------------------------------------------------------------------------
