@@ -66,6 +66,8 @@ async def repl(brain: Brain, session_id: str) -> None:
     while True:
         try:
             user_input = input("> ").strip()
+            # Sanitize surrogate characters that WSL2 terminals can inject
+            user_input = user_input.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
         except (EOFError, KeyboardInterrupt):
             print("\nGoodbye.")
             break
