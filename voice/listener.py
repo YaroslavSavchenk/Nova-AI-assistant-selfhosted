@@ -117,42 +117,54 @@ class Listener:
         self,
         silence_seconds: float = 5.0,
         sample_rate: int = 16000,
-        energy_threshold: float = 0.01,
+        energy_threshold: float = 0.01,  # kept for signature compat, unused
         max_duration: float = 30.0,
     ) -> "numpy.ndarray":  # noqa: F821
         """
         Record until the user has been silent for *silence_seconds*.
 
-        Each chunk (~0.1 s) is checked for energy. If energy > threshold,
-        the silence timer resets. Recording stops when silence_seconds
-        elapses with no speech, or max_duration is reached.
+        Uses webrtcvad for proper voice activity detection — only actual
+        speech resets the timer, background noise does not.
         """
         import numpy as np  # noqa: PLC0415
         import sounddevice as sd  # noqa: PLC0415
+        import webrtcvad  # noqa: PLC0415
 
-        chunk_size = int(sample_rate * 0.1)  # 100 ms chunks
-        max_chunks = int(max_duration * sample_rate / chunk_size)
-        silence_chunks_needed = int(silence_seconds * sample_rate / chunk_size)
+        # webrtcvad works on 16-bit PCM with 10/20/30 ms frames
+        frame_ms = 30  # ms per VAD frame
+        frame_size = int(sample_rate * frame_ms / 1000)  # samples per frame
+        max_frames = int(max_duration * 1000 / frame_ms)
+        silence_frames_needed = int(silence_seconds * 1000 / frame_ms)
+
+        vad = webrtcvad.Vad(aggressiveness=2)  # 0=least, 3=most aggressive
 
         recorded: list = []
-        silence_chunks = 0
+        silence_frames = 0
 
-        with sd.InputStream(samplerate=sample_rate, channels=1, dtype="float32", blocksize=chunk_size) as stream:
-            log.debug("VAD recording started (silence threshold=%.2f s)…", silence_seconds)
-            for _ in range(max_chunks):
-                chunk, _ = stream.read(chunk_size)
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16", blocksize=frame_size) as stream:
+            log.debug("VAD recording started (silence threshold=%.1f s)…", silence_seconds)
+            for _ in range(max_frames):
+                chunk, _ = stream.read(frame_size)
                 chunk = np.squeeze(chunk)
                 recorded.append(chunk)
 
-                rms = float(np.sqrt(np.mean(chunk ** 2)))
-                if rms > energy_threshold:
-                    silence_chunks = 0  # speech detected — reset timer
+                # webrtcvad expects raw bytes of 16-bit PCM
+                pcm_bytes = chunk.astype(np.int16).tobytes()
+                try:
+                    is_speech = vad.is_speech(pcm_bytes, sample_rate)
+                except Exception:
+                    is_speech = False
+
+                if is_speech:
+                    silence_frames = 0  # voice detected — reset timer
                 else:
-                    silence_chunks += 1
-                    if silence_chunks >= silence_chunks_needed:
+                    silence_frames += 1
+                    if silence_frames >= silence_frames_needed:
                         break  # enough silence — done
 
-        return np.concatenate(recorded) if recorded else np.array([], dtype="float32")
+        if not recorded:
+            return np.array([], dtype="float32")
+        return np.concatenate(recorded).astype(np.float32) / 32768.0  # int16 → float32
 
     async def listen_until_silence(
         self,
