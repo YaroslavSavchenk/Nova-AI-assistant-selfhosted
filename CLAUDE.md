@@ -37,9 +37,9 @@ nova/
 ├── modules/                 # Each file = one tool Nova can use
 │   ├── base.py              # Abstract base class all modules implement
 │   ├── web_search.py
-│   ├── calendar_tool.py
-│   ├── email_tool.py
-│   ├── smart_home.py
+│   ├── system_monitor.py
+│   ├── todo_reminders.py
+│   ├── research.py
 │   └── spotify.py
 ├── data/
 │   └── memory.db            # SQLite database (gitignored)

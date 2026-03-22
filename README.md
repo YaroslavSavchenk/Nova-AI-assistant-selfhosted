@@ -146,7 +146,9 @@ nova/
 │   ├── base.py              # NovaModule base class
 │   ├── web_search.py        # DuckDuckGo search
 │   ├── system_monitor.py    # CPU/RAM/GPU stats
-│   └── todo_reminders.py    # Persistent todos & scheduled reminders
+│   ├── todo_reminders.py    # Persistent todos & scheduled reminders
+│   ├── research.py          # Multi-source research, news, Wikipedia, URL summarization
+│   └── spotify.py           # Spotify playback control (play, queue, shuffle, playlists)
 ├── data/
 │   └── memory.db            # SQLite database (gitignored)
 ├── docs/
@@ -161,22 +163,26 @@ nova/
 
 Nova's capabilities are modular. Each module is a self-contained tool that the LLM can invoke through the tool-calling loop.
 
-### Available (MVP)
+### Available
 
 | Module | Description | External deps |
 |--------|-------------|---------------|
 | **Web search** | Search the internet via DuckDuckGo | `ddgs` (no API key) |
 | **System monitor** | CPU, RAM, GPU usage and disk info | `psutil`, `GPUtil` |
 | **Todo / reminders** | Create, list, complete todos with scheduled reminders | SQLite (built-in) |
+| **Research** | Multi-source search, news headlines, Wikipedia lookups, URL summarization | `httpx`, `feedparser` |
+| **Spotify** | Play music, control playback, queue tracks, manage playlists | `spotipy`, Spotify API key |
 
 ### Roadmap
 
 | Phase | Module | Status |
 |-------|--------|--------|
-| 3 | Smart home (Home Assistant) | Next |
-| 4 | News & research | Planned |
-| 5 | Spotify integration | Planned |
-| 6 | Calendar & Email (Google APIs) | Planned |
+| 3 | News & research | Complete |
+| 4 | Spotify integration | Complete |
+| 5 | Spotify lyrics search (Genius API) | Next |
+| 6 | Google Calendar | Planned |
+| 7 | Memory upgrade (semantic search, ChromaDB) | Planned |
+| 8 | Provider abstraction (Claude / OpenAI fallback) | Planned |
 
 ### Creating a new module
 
