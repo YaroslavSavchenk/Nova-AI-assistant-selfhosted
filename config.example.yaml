@@ -16,9 +16,9 @@ voice:
   wake_word: hey nova
 
 modules:
-  web_search: false
-  system_monitor: false
-  todo_reminders: false
+  web_search: true
+  system_monitor: true
+  todo_reminders: true
 
 logging:
   level: INFO

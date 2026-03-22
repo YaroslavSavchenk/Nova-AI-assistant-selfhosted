@@ -19,6 +19,9 @@ from core.memory import Memory
 from core.tool_router import ToolRouter
 from core.brain import Brain
 from modules.base import NovaModule
+from modules.web_search import WebSearchModule
+from modules.system_monitor import SystemMonitorModule
+from modules.todo_reminders import TodoModule
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +161,23 @@ async def main() -> None:
 
     tool_router = ToolRouter()
     tool_router.register(EchoModule())
+
+    modules_cfg = config.get("modules", {})
+
+    if modules_cfg.get("web_search", False):
+        tool_router.register(WebSearchModule())
+        logger.debug("Registered module: web_search")
+
+    if modules_cfg.get("system_monitor", False):
+        tool_router.register(SystemMonitorModule())
+        logger.debug("Registered module: system_monitor")
+
+    if modules_cfg.get("todo_reminders", False):
+        db_path = config["memory"]["db_path"]
+        todo_module = TodoModule(db_path=db_path)
+        await todo_module.init()
+        tool_router.register(todo_module)
+        logger.debug("Registered module: todo")
 
     brain = Brain(
         config=config,
