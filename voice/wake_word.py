@@ -1,9 +1,15 @@
 """
-voice/wake_word.py — Wake word detection using OpenWakeWord.
+voice/wake_word.py — Wake word detection.
 
-Listens continuously for a configured wake word and fires an async callback
-when the confidence score exceeds a threshold. Designed to run alongside the
-main asyncio event loop without blocking it.
+Supports two backends, selected via config:
+  - porcupine  (default) — Picovoice Porcupine, supports custom "Hey Nova" keyword
+  - openwakeword          — fallback, built-in keywords only (alexa, hey_jarvis, …)
+
+Porcupine setup (one-time):
+  1. Create a free account at console.picovoice.ai
+  2. Wake Word → New → type "Hey Nova" → train → download Linux .ppn file
+  3. Place the .ppn file anywhere and set voice.wake_word.model_path in config.yaml
+  4. Set voice.wake_word.access_key to your Picovoice AccessKey
 """
 
 import asyncio
@@ -12,84 +18,101 @@ from concurrent.futures import ThreadPoolExecutor
 
 log = logging.getLogger(__name__)
 
-# One dedicated thread for the blocking audio stream
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="wake_word")
 
-# Chunk size expected by OpenWakeWord: 1280 samples @ 16 kHz ≈ 80 ms
-_CHUNK_SIZE = 1280
 _SAMPLE_RATE = 16000
+_CHUNK_SIZE = 512  # Porcupine requires 512 samples per frame at 16 kHz
 
 
 class WakeWordDetector:
     """
-    Continuously streams microphone audio and fires a callback when the
-    configured wake word is detected.
+    Listens continuously for a wake word and fires an async callback on detection.
 
-    If the ``openwakeword`` package is not installed, or the requested model
-    fails to load, a warning is logged and detection is silently disabled.
-    Nova will then fall back to push-to-talk / text mode.
+    Tries Porcupine first (if access_key + model_path are set), then falls back
+    to OpenWakeWord for built-in keywords.
     """
 
-    def __init__(self, model_name: str = "hey_nova", threshold: float = 0.5):
+    def __init__(
+        self,
+        model_name: str = "hey_nova",
+        threshold: float = 0.5,
+        access_key: str = "",
+        model_path: str = "",
+    ):
         """
         Args:
-            model_name: Name of the OpenWakeWord model to load.  Built-in
-                        options include "alexa" and "hey_mycroft".  A custom
-                        "hey_nova" model can be provided by placing the ONNX
-                        file in the OpenWakeWord model directory.
-            threshold:  Confidence score (0.0–1.0) above which a detection is
-                        reported.
+            model_name:  Wake word name (used for OpenWakeWord fallback).
+            threshold:   Detection confidence threshold (OpenWakeWord only).
+            access_key:  Picovoice AccessKey (required for Porcupine).
+            model_path:  Path to the .ppn keyword file (required for Porcupine).
         """
         self.model_name = model_name
         self.threshold = threshold
-        self._oww_model = None  # Loaded lazily on first call
+        self.access_key = access_key
+        self.model_path = model_path
+        self._backend: str = ""  # "porcupine" or "openwakeword" — set on load
+        self._porcupine = None
+        self._oww_model = None
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Model loading
     # ------------------------------------------------------------------
 
-    def _load_model(self) -> bool:
-        """
-        Attempt to load the OpenWakeWord model.
+    def _load_porcupine(self) -> bool:
+        """Try to load the Porcupine backend."""
+        if not self.access_key or not self.model_path:
+            return False
+        try:
+            import pvporcupine  # noqa: PLC0415
+            from pathlib import Path  # noqa: PLC0415
 
-        Returns:
-            True on success, False if the package/model is unavailable.
-        """
+            ppn_path = str(Path(self.model_path).expanduser().resolve())
+            log.info("Loading Porcupine wake word model from '%s' …", ppn_path)
+            self._porcupine = pvporcupine.create(
+                access_key=self.access_key,
+                keyword_paths=[ppn_path],
+            )
+            self._backend = "porcupine"
+            log.info("Porcupine wake word loaded (frame_length=%d).", self._porcupine.frame_length)
+            return True
+        except ImportError:
+            log.warning("pvporcupine not installed — trying OpenWakeWord fallback.")
+            return False
+        except Exception as exc:
+            log.warning("Failed to load Porcupine model: %s", exc)
+            return False
+
+    def _load_openwakeword(self) -> bool:
+        """Try to load the OpenWakeWord backend."""
         try:
             import openwakeword  # noqa: PLC0415
             from openwakeword.model import Model  # noqa: PLC0415
 
-            # Resolve model name to a file path for built-in models
             all_paths = openwakeword.get_pretrained_model_paths()
             matched = [p for p in all_paths if self.model_name.lower() in p.lower()]
             if not matched:
                 log.warning(
-                    "No built-in OpenWakeWord model found for '%s'. "
-                    "Available: %s",
+                    "No OpenWakeWord model found for '%s'. Available: %s. "
+                    "Configure Porcupine for custom wake words.",
                     self.model_name,
                     [p.split("/")[-1] for p in all_paths],
                 )
                 return False
 
-            model_path = matched[0]
             log.info("Loading OpenWakeWord model '%s' …", self.model_name)
-            self._oww_model = Model(wakeword_model_paths=[model_path])
+            self._oww_model = Model(wakeword_model_paths=[matched[0]])
+            self._backend = "openwakeword"
             log.info("OpenWakeWord model '%s' loaded.", self.model_name)
             return True
         except ImportError:
-            log.warning(
-                "openwakeword is not installed — wake word detection disabled. "
-                "Nova will fall back to push-to-talk / text mode."
-            )
+            log.warning("openwakeword not installed — wake word detection disabled.")
             return False
         except Exception as exc:
-            log.warning(
-                "Failed to load OpenWakeWord model '%s': %s — "
-                "wake word detection disabled.",
-                self.model_name,
-                exc,
-            )
+            log.warning("Failed to load OpenWakeWord model: %s", exc)
             return False
+
+    def _load_model(self) -> bool:
+        return self._load_porcupine() or self._load_openwakeword()
 
     # ------------------------------------------------------------------
     # Public async API
@@ -100,32 +123,23 @@ class WakeWordDetector:
         callback: callable,
         stop_event: asyncio.Event,
     ) -> None:
-        """
-        Stream microphone audio continuously and call *callback* whenever the
-        wake word is detected.
-
-        Audio chunks are produced in a background thread (to avoid blocking the
-        event loop) and passed to the async side via an :class:`asyncio.Queue`.
-        The OpenWakeWord scoring also runs in the background thread so the CPU
-        work stays off the event loop.
-
-        Args:
-            callback:   Async callable invoked when the wake word fires.
-            stop_event: Setting this event causes the listener to stop cleanly.
-        """
+        """Stream mic audio and call callback() whenever the wake word fires."""
         loop = asyncio.get_event_loop()
 
         if not self._load_model():
-            # Gracefully degrade — just wait until stop_event is set
-            log.info("Wake word detection inactive; waiting for stop_event.")
+            log.info("Wake word detection inactive; falling back to push-to-talk.")
             await stop_event.wait()
             return
 
         audio_queue: asyncio.Queue = asyncio.Queue()
-        _triggered = False  # cooldown flag — reset after callback completes
+        _triggered = False
+
+        if self._backend == "porcupine":
+            chunk_size = self._porcupine.frame_length
+        else:
+            chunk_size = 1280  # OpenWakeWord expects 1280 samples
 
         def _stream_audio() -> None:
-            """Background thread: stream mic chunks into the async queue."""
             nonlocal _triggered
             try:
                 import sounddevice as sd  # noqa: PLC0415
@@ -135,38 +149,36 @@ class WakeWordDetector:
                     samplerate=_SAMPLE_RATE,
                     channels=1,
                     dtype="int16",
-                    blocksize=_CHUNK_SIZE,
+                    blocksize=chunk_size,
                 ) as stream:
-                    log.debug("Wake word audio stream started.")
+                    log.debug("Wake word stream started (%s backend).", self._backend)
                     while not stop_event.is_set():
-                        chunk, _ = stream.read(_CHUNK_SIZE)
+                        chunk, _ = stream.read(chunk_size)
                         audio_chunk = np.squeeze(chunk)
-                        # Score on this thread (CPU-only, ~1 ms per chunk)
-                        prediction = self._oww_model.predict(audio_chunk)
-                        # Key may include version suffix (e.g. "alexa_v0.1")
-                        score = max(prediction.values()) if prediction else 0.0
-                        if score > self.threshold and not _triggered:
-                            log.info(
-                                "Wake word '%s' detected (score=%.3f).",
-                                self.model_name,
-                                score,
-                            )
+
+                        detected = False
+                        if self._backend == "porcupine":
+                            result = self._porcupine.process(audio_chunk.tolist())
+                            detected = result >= 0
+                        else:
+                            pred = self._oww_model.predict(audio_chunk)
+                            score = max(pred.values()) if pred else 0.0
+                            detected = score > self.threshold
+
+                        if detected and not _triggered:
+                            log.info("Wake word detected (%s).", self._backend)
                             _triggered = True
-                            # Signal the async side
-                            loop.call_soon_threadsafe(
-                                audio_queue.put_nowait, "WAKE"
-                            )
+                            loop.call_soon_threadsafe(audio_queue.put_nowait, "WAKE")
+
             except Exception as exc:
-                log.warning("Wake word audio stream error: %s", exc)
+                log.warning("Wake word stream error: %s", exc)
             finally:
-                log.debug("Wake word audio stream stopped.")
-                # Unblock the async consumer so it can exit cleanly
+                if self._backend == "porcupine" and self._porcupine:
+                    self._porcupine.delete()
                 loop.call_soon_threadsafe(audio_queue.put_nowait, None)
 
-        # Start the background thread
         future = loop.run_in_executor(_executor, _stream_audio)
 
-        # Consume events on the async side
         while not stop_event.is_set():
             try:
                 event = await asyncio.wait_for(audio_queue.get(), timeout=0.5)
@@ -174,15 +186,13 @@ class WakeWordDetector:
                 continue
 
             if event is None:
-                # Stream thread exited
                 break
             if event == "WAKE":
                 try:
                     await callback()
                 except Exception as exc:
-                    log.warning("Wake word callback raised an exception: %s", exc)
+                    log.warning("Wake word callback error: %s", exc)
                 finally:
-                    _triggered = False  # re-arm after interaction completes
+                    _triggered = False
 
-        # Ensure the executor thread can finish
         await asyncio.gather(future, return_exceptions=True)

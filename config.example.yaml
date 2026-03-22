@@ -23,8 +23,10 @@ voice:
     device: cpu
   wake_word:
     enabled: true
-    model: alexa            # Built-in: "alexa", "hey_mycroft". Custom: "hey_nova" (needs ONNX file)
-    threshold: 0.5
+    model: hey_nova                  # Display name / OpenWakeWord fallback model name
+    access_key: ""                   # Picovoice AccessKey (from console.picovoice.ai)
+    model_path: voice/hey_nova.ppn   # Path to downloaded .ppn keyword file
+    threshold: 0.5                   # Confidence threshold (OpenWakeWord fallback only)
 
 modules:
   web_search: true

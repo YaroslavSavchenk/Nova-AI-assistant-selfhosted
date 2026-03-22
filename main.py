@@ -288,14 +288,13 @@ async def main() -> None:
             device=stt_cfg.get("device", "cpu"),
         )
         speaker = Speaker(
-            model_name=tts_cfg.get("model", "tts_models/multilingual/multi-dataset/xtts_v2"),
-            speaker_wav=tts_cfg.get("speaker_wav") or None,
             language=tts_cfg.get("language", "en"),
-            device=tts_cfg.get("device", "cpu"),
         )
         wake_detector = WakeWordDetector(
-            model_name=wake_cfg.get("model", "alexa"),
+            model_name=wake_cfg.get("model", "hey_nova"),
             threshold=wake_cfg.get("threshold", 0.5),
+            access_key=wake_cfg.get("access_key", ""),
+            model_path=wake_cfg.get("model_path", ""),
         )
 
         await voice_repl(
