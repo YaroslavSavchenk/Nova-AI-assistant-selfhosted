@@ -28,6 +28,7 @@ modules:
   web_search: true
   system_monitor: true
   todo_reminders: true
+  research: true
 
 logging:
   level: INFO
