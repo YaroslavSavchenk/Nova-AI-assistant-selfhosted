@@ -141,7 +141,8 @@ class WakeWordDetector:
                         audio_chunk = np.squeeze(chunk)
                         # Score on this thread (CPU-only, ~1 ms per chunk)
                         prediction = self._oww_model.predict(audio_chunk)
-                        score = prediction.get(self.model_name, 0.0)
+                        # Key may include version suffix (e.g. "alexa_v0.1")
+                        score = max(prediction.values()) if prediction else 0.0
                         if score > self.threshold:
                             log.info(
                                 "Wake word '%s' detected (score=%.3f).",
