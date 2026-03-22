@@ -11,3 +11,4 @@ faster-whisper>=1.0
 sounddevice>=0.4
 soundfile>=0.12
 openwakeword>=0.6
+TTS>=0.22
