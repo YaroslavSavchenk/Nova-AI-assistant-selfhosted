@@ -20,6 +20,10 @@ _WSL_PULSE_SERVER = "/mnt/wslg/PulseServer"
 if Path(_WSL_PULSE_SERVER).exists() and "PULSE_SERVER" not in os.environ:
     os.environ["PULSE_SERVER"] = f"unix:{_WSL_PULSE_SERVER}"
 
+# Suppress onnxruntime CUDA provider warning (we intentionally run on CPU)
+import warnings
+warnings.filterwarnings("ignore", message=".*CUDAExecutionProvider.*")
+
 from core.config_loader import load_config
 from core.memory import Memory
 from core.tool_router import ToolRouter
