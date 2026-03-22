@@ -35,8 +35,7 @@ from modules.web_search import WebSearchModule
 from modules.system_monitor import SystemMonitorModule
 from modules.todo_reminders import TodoModule
 from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule
-from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule
-from modules.spotify_lyrics_search import SpotifyLyricsSearchModule
+from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 
 
 # ---------------------------------------------------------------------------

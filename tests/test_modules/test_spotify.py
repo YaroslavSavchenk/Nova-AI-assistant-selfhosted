@@ -1,7 +1,7 @@
 """
-Tests for modules/spotify.py — SpotifyPlayModule, SpotifyControlModule,
+Tests for modules/spotify/ — SpotifyPlayModule, SpotifyControlModule,
 SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule,
-SpotifyViewQueueModule.
+SpotifyViewQueueModule, SpotifySkipToModule.
 """
 
 import pytest
@@ -168,7 +168,7 @@ async def test_play_track_success(play_module):
     sp = _mock_sp()
     sp.search.return_value = _fake_track_search()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="Bohemian Rhapsody", type="track")
 
     sp.start_playback.assert_called_once_with(
@@ -194,7 +194,7 @@ async def test_play_track_fallback_to_uri_when_no_album(play_module):
         }
     }
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="Orphan Track", type="track")
 
     sp.start_playback.assert_called_once_with(
@@ -212,7 +212,7 @@ async def test_play_artist_success(play_module):
         {"tracks": {"items": [{"uri": f"spotify:track:{i}"} for i in range(5)]}},
     ]
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="Arctic Monkeys", type="artist")
 
     sp.start_playback.assert_called_once()
@@ -223,7 +223,7 @@ async def test_play_album_success(play_module):
     sp = _mock_sp()
     sp.search.return_value = _fake_album_search()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="AM", type="album")
 
     sp.start_playback.assert_called_once_with(device_id="test-device-id", context_uri="spotify:album:xyz")
@@ -243,7 +243,7 @@ async def test_play_playlist_success(play_module):
         "next": None,
     }
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="Chill Vibes", type="playlist")
 
     sp.start_playback.assert_called_once_with(device_id="test-device-id", context_uri="spotify:playlist:ppp")
@@ -254,7 +254,7 @@ async def test_play_defaults_to_track_type(play_module):
     sp = _mock_sp()
     sp.search.return_value = _fake_track_search()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         await play_module.run(query="some song")
 
     call_kwargs = sp.search.call_args
@@ -265,21 +265,21 @@ async def test_play_no_results(play_module):
     sp = _mock_sp()
     sp.search.return_value = {"tracks": {"items": []}}
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="xyzunknownsong123")
 
     assert "No track found" in result or "No Spotify" in result
 
 
 async def test_play_empty_query_returns_error(play_module):
-    with patch("modules.spotify._get_client", return_value=_mock_sp()):
+    with patch("modules.spotify.play._get_client", return_value=_mock_sp()):
         result = await play_module.run(query="")
 
     assert "error" in result.lower() or "empty" in result.lower()
 
 
 async def test_play_not_configured(play_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.play._get_client", return_value=None):
         result = await play_module.run(query="test")
 
     assert "not configured" in result.lower() or "spotify_auth" in result.lower()
@@ -289,7 +289,7 @@ async def test_play_exception_returns_error_string(play_module):
     sp = _mock_sp()
     sp.search.side_effect = RuntimeError("network error")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="test")
 
     assert "failed" in result.lower() or "error" in result.lower()
@@ -302,7 +302,7 @@ async def test_play_exception_returns_error_string(play_module):
 
 async def test_control_pause(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="pause")
 
     sp.pause_playback.assert_called_once()
@@ -311,7 +311,7 @@ async def test_control_pause(control_module):
 
 async def test_control_resume(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="resume")
 
     sp.start_playback.assert_called_once()
@@ -320,8 +320,8 @@ async def test_control_resume(control_module):
 
 async def test_control_next(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp), \
-         patch("modules.spotify._now_playing_text", return_value="Now playing: In the End by Linkin Park"):
+    with patch("modules.spotify.control._get_client", return_value=sp), \
+         patch("modules.spotify.control._now_playing_text", return_value="Now playing: In the End by Linkin Park"):
         result = await control_module.run(action="next")
 
     sp.next_track.assert_called_once()
@@ -331,8 +331,8 @@ async def test_control_next(control_module):
 async def test_control_next_with_count(control_module):
     """action='next' with count=3 skips 3 tracks."""
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp), \
-         patch("modules.spotify._now_playing_text", return_value="Now playing: Thunder by Imagine Dragons"):
+    with patch("modules.spotify.control._get_client", return_value=sp), \
+         patch("modules.spotify.control._now_playing_text", return_value="Now playing: Thunder by Imagine Dragons"):
         result = await control_module.run(action="next", count=3)
 
     assert sp.next_track.call_count == 3
@@ -342,8 +342,8 @@ async def test_control_next_with_count(control_module):
 
 async def test_control_previous(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp), \
-         patch("modules.spotify._now_playing_text", return_value="Now playing: Numb by Linkin Park"):
+    with patch("modules.spotify.control._get_client", return_value=sp), \
+         patch("modules.spotify.control._now_playing_text", return_value="Now playing: Numb by Linkin Park"):
         result = await control_module.run(action="previous")
 
     sp.previous_track.assert_called_once()
@@ -352,7 +352,7 @@ async def test_control_previous(control_module):
 
 async def test_control_volume(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="volume", volume=75)
 
     sp.volume.assert_called_once_with(75, device_id="test-device-id")
@@ -361,7 +361,7 @@ async def test_control_volume(control_module):
 
 async def test_control_volume_clamped(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         await control_module.run(action="volume", volume=999)
 
     sp.volume.assert_called_once_with(100, device_id="test-device-id")
@@ -369,14 +369,14 @@ async def test_control_volume_clamped(control_module):
 
 async def test_control_unknown_action(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="dance")
 
     assert "unknown" in result.lower() or "valid" in result.lower()
 
 
 async def test_control_not_configured(control_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.control._get_client", return_value=None):
         result = await control_module.run(action="pause")
 
     assert "not configured" in result.lower()
@@ -391,7 +391,7 @@ async def test_now_playing_returns_track_info(now_playing_module):
     sp = _mock_sp()
     sp.current_playback.return_value = _fake_now_playing()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.now_playing._get_client", return_value=sp):
         result = await now_playing_module.run()
 
     assert "Bohemian Rhapsody" in result
@@ -404,7 +404,7 @@ async def test_now_playing_shows_paused_state(now_playing_module):
     sp = _mock_sp()
     sp.current_playback.return_value = _fake_now_playing(is_playing=False)
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.now_playing._get_client", return_value=sp):
         result = await now_playing_module.run()
 
     assert "Paused" in result
@@ -414,14 +414,14 @@ async def test_now_playing_nothing_playing(now_playing_module):
     sp = _mock_sp()
     sp.current_playback.return_value = None
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.now_playing._get_client", return_value=sp):
         result = await now_playing_module.run()
 
     assert "Nothing" in result or "nothing" in result
 
 
 async def test_now_playing_not_configured(now_playing_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.now_playing._get_client", return_value=None):
         result = await now_playing_module.run()
 
     assert "not configured" in result.lower()
@@ -431,7 +431,7 @@ async def test_now_playing_exception_returns_error_string(now_playing_module):
     sp = _mock_sp()
     sp.current_playback.side_effect = RuntimeError("connection lost")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.now_playing._get_client", return_value=sp):
         result = await now_playing_module.run()
 
     assert "failed" in result.lower() or "error" in result.lower()
@@ -447,7 +447,7 @@ async def test_play_user_playlist_by_name(play_module):
     sp = _mock_sp()
     sp.current_user_playlists.return_value = _fake_user_playlists()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="My Workout Mix", type="playlist")
 
     sp.start_playback.assert_called_once_with(
@@ -461,7 +461,7 @@ async def test_play_user_playlist_with_filler_words(play_module):
     sp = _mock_sp()
     sp.current_user_playlists.return_value = _fake_user_playlists()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="my Workout Mix playlist", type="playlist")
 
     sp.start_playback.assert_called_once_with(
@@ -475,7 +475,7 @@ async def test_play_liked_songs_alias(play_module):
     sp = _mock_sp()
     sp.current_user_saved_tracks.return_value = _fake_saved_tracks(total=5)
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="liked songs", type="playlist")
 
     sp.start_playback.assert_called_once()
@@ -486,7 +486,7 @@ async def test_play_liked_songs_empty(play_module):
     sp = _mock_sp()
     sp.current_user_saved_tracks.return_value = {"total": 0, "items": []}
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="liked", type="playlist")
 
     assert "no liked" in result.lower() or "no saved" in result.lower()
@@ -503,7 +503,7 @@ async def test_my_playlists_all(my_playlists_module):
     sp.current_user_playlists.return_value = _fake_user_playlists("user123")
     sp.current_user_saved_tracks.return_value = _fake_saved_tracks(total=42)
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.playlists._get_client", return_value=sp):
         result = await my_playlists_module.run()
 
     assert "My Workout Mix" in result
@@ -516,7 +516,7 @@ async def test_my_playlists_mine_only(my_playlists_module):
     sp.current_user.return_value = {"id": "user123"}
     sp.current_user_playlists.return_value = _fake_user_playlists("user123")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.playlists._get_client", return_value=sp):
         result = await my_playlists_module.run(filter="mine")
 
     assert "My Workout Mix" in result
@@ -529,7 +529,7 @@ async def test_my_playlists_saved_only(my_playlists_module):
     sp.current_user_playlists.return_value = _fake_user_playlists("user123")
     sp.current_user_saved_tracks.return_value = _fake_saved_tracks(total=10)
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.playlists._get_client", return_value=sp):
         result = await my_playlists_module.run(filter="saved")
 
     assert "Indie Discovers" in result
@@ -537,7 +537,7 @@ async def test_my_playlists_saved_only(my_playlists_module):
 
 
 async def test_my_playlists_not_configured(my_playlists_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.playlists._get_client", return_value=None):
         result = await my_playlists_module.run()
 
     assert "not configured" in result.lower()
@@ -550,7 +550,7 @@ async def test_my_playlists_not_configured(my_playlists_module):
 
 async def test_shuffle_on(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="shuffle", state="on")
 
     sp.shuffle.assert_called_once_with(True, device_id="test-device-id")
@@ -559,7 +559,7 @@ async def test_shuffle_on(control_module):
 
 async def test_shuffle_off(control_module):
     sp = _mock_sp()
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="shuffle", state="off")
 
     sp.shuffle.assert_called_once_with(False, device_id="test-device-id")
@@ -571,7 +571,7 @@ async def test_shuffle_toggle_when_off(control_module):
     sp = _mock_sp()
     sp.current_playback.return_value = {"shuffle_state": False, "is_playing": True}
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="shuffle", state="toggle")
 
     sp.shuffle.assert_called_once_with(True, device_id="test-device-id")
@@ -583,7 +583,7 @@ async def test_shuffle_toggle_when_on(control_module):
     sp = _mock_sp()
     sp.current_playback.return_value = {"shuffle_state": True, "is_playing": True}
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="shuffle")  # default state = toggle
 
     sp.shuffle.assert_called_once_with(False, device_id="test-device-id")
@@ -595,7 +595,7 @@ async def test_shuffle_toggle_no_playback(control_module):
     sp = _mock_sp()
     sp.current_playback.return_value = None
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await control_module.run(action="shuffle", state="toggle")
 
     sp.shuffle.assert_called_once_with(True, device_id="test-device-id")
@@ -612,7 +612,7 @@ async def test_queue_track_success(queue_module):
     sp.search.return_value = _fake_track_search(name="Stairway to Heaven", artist="Led Zeppelin",
                                                 uri="spotify:track:stairway")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await queue_module.run(query="Stairway to Heaven")
 
     sp.add_to_queue.assert_called_once_with("spotify:track:stairway")
@@ -624,7 +624,7 @@ async def test_queue_track_not_found(queue_module):
     sp = _mock_sp()
     sp.search.return_value = {"tracks": {"items": []}}
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await queue_module.run(query="xyzunknown999")
 
     sp.add_to_queue.assert_not_called()
@@ -632,14 +632,14 @@ async def test_queue_track_not_found(queue_module):
 
 
 async def test_queue_empty_query(queue_module):
-    with patch("modules.spotify._get_client", return_value=_mock_sp()):
+    with patch("modules.spotify.queue._get_client", return_value=_mock_sp()):
         result = await queue_module.run(query="")
 
     assert "error" in result.lower() or "empty" in result.lower()
 
 
 async def test_queue_not_configured(queue_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.queue._get_client", return_value=None):
         result = await queue_module.run(query="any song")
 
     assert "not configured" in result.lower()
@@ -649,7 +649,7 @@ async def test_queue_exception_returns_error_string(queue_module):
     sp = _mock_sp()
     sp.search.side_effect = RuntimeError("network error")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await queue_module.run(query="some song")
 
     assert "failed" in result.lower() or "error" in result.lower()
@@ -662,7 +662,7 @@ async def test_queue_parses_by_format(queue_module):
         name="Believer", artist="Imagine Dragons", uri="spotify:track:believer"
     )
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await queue_module.run(query="Believer by Imagine Dragons")
 
     call_args = sp.search.call_args
@@ -683,7 +683,7 @@ async def test_play_track_parses_by_format(play_module):
     sp = _mock_sp()
     sp.search.return_value = _fake_track_search(name="I'm Happy", artist="The Goo Goo Dolls", uri="spotify:track:imhappy")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="I'm Happy by The Goo Goo Dolls", type="track")
 
     q_used = sp.search.call_args.kwargs.get("q")
@@ -698,7 +698,7 @@ async def test_play_track_parses_dash_format(play_module):
     sp = _mock_sp()
     sp.search.return_value = _fake_track_search(name="Stairway to Heaven", artist="Led Zeppelin", uri="spotify:track:stairway")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         result = await play_module.run(query="Stairway to Heaven - Led Zeppelin", type="track")
 
     q_used = sp.search.call_args.kwargs.get("q")
@@ -712,7 +712,7 @@ async def test_play_track_plain_query_unchanged(play_module):
     sp = _mock_sp()
     sp.search.return_value = _fake_track_search(name="Bohemian Rhapsody", artist="Queen")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.play._get_client", return_value=sp):
         await play_module.run(query="Bohemian Rhapsody", type="track")
 
     q_used = sp.search.call_args.kwargs.get("q")
@@ -742,7 +742,7 @@ async def test_view_queue_shows_current_and_upcoming(view_queue_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue()
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await view_queue_module.run()
 
     assert "Believer" in result
@@ -765,7 +765,7 @@ async def test_view_queue_deduplicates_current_track_copies(view_queue_module):
         ],
     }
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await view_queue_module.run()
 
     # Believers should be filtered (copies of currently playing)
@@ -780,7 +780,7 @@ async def test_view_queue_empty_queue(view_queue_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue(next_tracks=[])
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await view_queue_module.run()
 
     assert "empty" in result.lower() or "nothing" in result.lower()
@@ -791,7 +791,7 @@ async def test_view_queue_nothing_playing(view_queue_module):
     sp = _mock_sp()
     sp.queue.return_value = None
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await view_queue_module.run()
 
     assert "nothing" in result.lower() or "not playing" in result.lower()
@@ -804,7 +804,7 @@ async def test_view_queue_caps_at_five(view_queue_module):
         next_tracks=[{"name": f"Song {i}", "artists": [{"name": "Artist"}]} for i in range(10)]
     )
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await view_queue_module.run()
 
     assert "5." in result
@@ -813,7 +813,7 @@ async def test_view_queue_caps_at_five(view_queue_module):
 
 
 async def test_view_queue_not_configured(view_queue_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.queue._get_client", return_value=None):
         result = await view_queue_module.run()
 
     assert "not configured" in result.lower()
@@ -823,7 +823,7 @@ async def test_view_queue_exception_returns_error_string(view_queue_module):
     sp = _mock_sp()
     sp.queue.side_effect = RuntimeError("connection lost")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.queue._get_client", return_value=sp):
         result = await view_queue_module.run()
 
     assert "failed" in result.lower() or "error" in result.lower()
@@ -846,7 +846,7 @@ async def test_skip_to_first_track(skip_to_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue_with_tracks("Demons", "Thunder", "Manic")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await skip_to_module.run(track_name="Demons")
 
     sp.next_track.assert_called_once()
@@ -858,7 +858,7 @@ async def test_skip_to_third_track(skip_to_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue_with_tracks("Demons", "Thunder", "Manic")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await skip_to_module.run(track_name="Manic")
 
     assert sp.next_track.call_count == 3
@@ -871,7 +871,7 @@ async def test_skip_to_partial_name_match(skip_to_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue_with_tracks("Demons", "Him & I (with Halsey)", "Thunder")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await skip_to_module.run(track_name="him and i")
 
     assert sp.next_track.call_count == 2
@@ -883,7 +883,7 @@ async def test_skip_to_not_in_queue(skip_to_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue_with_tracks("Demons", "Thunder")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await skip_to_module.run(track_name="Stairway to Heaven")
 
     sp.next_track.assert_not_called()
@@ -895,7 +895,7 @@ async def test_skip_to_empty_queue(skip_to_module):
     sp = _mock_sp()
     sp.queue.return_value = {"currently_playing": None, "queue": []}
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await skip_to_module.run(track_name="Demons")
 
     sp.next_track.assert_not_called()
@@ -903,7 +903,7 @@ async def test_skip_to_empty_queue(skip_to_module):
 
 
 async def test_skip_to_not_configured(skip_to_module):
-    with patch("modules.spotify._get_client", return_value=None):
+    with patch("modules.spotify.control._get_client", return_value=None):
         result = await skip_to_module.run(track_name="Demons")
 
     assert "not configured" in result.lower()
@@ -913,7 +913,7 @@ async def test_skip_to_exception_returns_error_string(skip_to_module):
     sp = _mock_sp()
     sp.queue.side_effect = RuntimeError("connection lost")
 
-    with patch("modules.spotify._get_client", return_value=sp):
+    with patch("modules.spotify.control._get_client", return_value=sp):
         result = await skip_to_module.run(track_name="Demons")
 
     assert "failed" in result.lower() or "error" in result.lower()

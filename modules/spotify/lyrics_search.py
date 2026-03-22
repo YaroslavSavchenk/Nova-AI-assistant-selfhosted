@@ -1,5 +1,5 @@
 """
-Spotify Lyrics Search module for Nova — identify songs from lyric snippets.
+SpotifyLyricsSearchModule — identify songs from lyric snippets.
 
 Uses the Genius API to search for songs matching a lyric fragment. Returns the
 top candidates for the user to confirm, then Nova calls spotify_play to play it.

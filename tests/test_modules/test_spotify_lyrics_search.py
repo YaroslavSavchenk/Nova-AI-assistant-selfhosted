@@ -1,12 +1,12 @@
 """
-Tests for modules/spotify_lyrics_search.py — SpotifyLyricsSearchModule.
+Tests for modules/spotify/lyrics_search.py — SpotifyLyricsSearchModule.
 """
 
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from modules.spotify_lyrics_search import SpotifyLyricsSearchModule
+from modules.spotify import SpotifyLyricsSearchModule
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ async def test_single_match_returns_confirmation_prompt(module):
     mock_ctx = _mock_httpx_client(_mock_httpx_response(data))
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="is this the real life is this just fantasy")
 
     assert "Bohemian Rhapsody" in result
@@ -82,7 +82,7 @@ async def test_multiple_matches_returns_numbered_list(module):
     mock_ctx = _mock_httpx_client(_mock_httpx_response(data))
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="we will we will rock you")
 
     assert "1." in result
@@ -101,7 +101,7 @@ async def test_max_three_candidates_returned(module):
     mock_ctx = _mock_httpx_client(_mock_httpx_response(data))
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="some lyric")
 
     assert "4." not in result
@@ -118,7 +118,7 @@ async def test_genius_query_uses_lyrics_as_search_term(module):
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             await module.run(lyrics="stairway to heaven")
 
     call_kwargs = mock_client.get.call_args
@@ -136,7 +136,7 @@ async def test_no_results_returns_friendly_message(module):
     mock_ctx = _mock_httpx_client(_mock_httpx_response(data))
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="xyznonexistentlyric999abc")
 
     assert "no songs found" in result.lower()
@@ -176,7 +176,7 @@ async def test_401_unauthorized_gives_clear_message(module):
     mock_ctx = _mock_httpx_client(mock_resp)
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "bad-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="some lyric")
 
     assert "invalid" in result.lower() or "token" in result.lower()
@@ -190,7 +190,7 @@ async def test_network_error_returns_error_string(module):
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="some lyric")
 
     assert "network" in result.lower() or "error" in result.lower()
@@ -204,7 +204,7 @@ async def test_unexpected_exception_returns_error_string(module):
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
 
     with patch.dict("os.environ", {"GENIUS_ACCESS_TOKEN": "fake-token"}):
-        with patch("modules.spotify_lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
+        with patch("modules.spotify.lyrics_search.httpx.AsyncClient", return_value=mock_ctx):
             result = await module.run(lyrics="some lyric")
 
     assert "failed" in result.lower() or "error" in result.lower()
