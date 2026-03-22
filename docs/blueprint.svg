@@ -1,0 +1,223 @@
+<svg width="100%" viewBox="0 0 680 920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <style>
+    /* Light mode defaults */
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f4f0;
+      --text-primary: #2C2C2A;
+      --text-secondary: #5F5E5A;
+      --border: #B4B2A9;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1a1a18;
+        --bg-secondary: #2C2C2A;
+        --text-primary: #e8e6de;
+        --text-secondary: #B4B2A9;
+        --border: #5F5E5A;
+      }
+      /* Dark mode color overrides */
+      .fill-purple { fill: #3C3489; }
+      .stroke-purple { stroke: #AFA9EC; }
+      .title-purple { fill: #CECBF6; }
+      .sub-purple { fill: #AFA9EC; }
+
+      .fill-teal { fill: #085041; }
+      .stroke-teal { stroke: #5DCAA5; }
+      .title-teal { fill: #9FE1CB; }
+      .sub-teal { fill: #5DCAA5; }
+
+      .fill-coral { fill: #712B13; }
+      .stroke-coral { stroke: #F0997B; }
+      .title-coral { fill: #F5C4B3; }
+      .sub-coral { fill: #F0997B; }
+
+      .fill-gray { fill: #444441; }
+      .stroke-gray { stroke: #B4B2A9; }
+      .title-gray { fill: #D3D1C7; }
+      .sub-gray { fill: #B4B2A9; }
+
+      .fill-blue { fill: #0C447C; }
+      .stroke-blue { stroke: #85B7EB; }
+      .title-blue { fill: #B5D4F4; }
+      .sub-blue { fill: #85B7EB; }
+
+      .fill-pink { fill: #72243E; }
+      .stroke-pink { stroke: #ED93B1; }
+      .title-pink { fill: #F4C0D1; }
+      .sub-pink { fill: #ED93B1; }
+
+      .fill-amber { fill: #633806; }
+      .stroke-amber { stroke: #EF9F27; }
+      .title-amber { fill: #FAC775; }
+      .sub-amber { fill: #EF9F27; }
+
+      .arr-line { stroke: var(--text-secondary); }
+      .heading { fill: var(--text-primary); }
+      .label-success { fill: #97C459; }
+      .label-muted { fill: var(--text-secondary); }
+    }
+
+    /* Light mode colors */
+    .fill-purple { fill: #EEEDFE; }
+    .stroke-purple { stroke: #534AB7; }
+    .title-purple { fill: #3C3489; }
+    .sub-purple { fill: #534AB7; }
+
+    .fill-teal { fill: #E1F5EE; }
+    .stroke-teal { stroke: #0F6E56; }
+    .title-teal { fill: #085041; }
+    .sub-teal { fill: #0F6E56; }
+
+    .fill-coral { fill: #FAECE7; }
+    .stroke-coral { stroke: #993C1D; }
+    .title-coral { fill: #712B13; }
+    .sub-coral { fill: #993C1D; }
+
+    .fill-gray { fill: #F1EFE8; }
+    .stroke-gray { stroke: #5F5E5A; }
+    .title-gray { fill: #444441; }
+    .sub-gray { fill: #5F5E5A; }
+
+    .fill-blue { fill: #E6F1FB; }
+    .stroke-blue { stroke: #185FA5; }
+    .title-blue { fill: #0C447C; }
+    .sub-blue { fill: #185FA5; }
+
+    .fill-pink { fill: #FBEAF0; }
+    .stroke-pink { stroke: #993556; }
+    .title-pink { fill: #72243E; }
+    .sub-pink { fill: #993556; }
+
+    .fill-amber { fill: #FAEEDA; }
+    .stroke-amber { stroke: #854F0B; }
+    .title-amber { fill: #633806; }
+    .sub-amber { fill: #854F0B; }
+
+    .arr-line { stroke: #5F5E5A; }
+    .heading { fill: #2C2C2A; font-weight: 500; font-size: 16px; }
+    .section-heading { fill: #2C2C2A; font-weight: 500; font-size: 14px; }
+    .label-success { fill: #639922; }
+    .label-muted { fill: #5F5E5A; }
+
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .t  { font-size: 14px; font-weight: 400; }
+    .ts { font-size: 12px; font-weight: 400; }
+    .th { font-size: 14px; font-weight: 500; }
+  </style>
+
+  <!-- Background -->
+  <rect width="680" height="920" fill="none"/>
+
+  <!-- Title -->
+  <text class="heading" x="340" y="30" text-anchor="middle">Nova — complete blueprint</text>
+
+  <!-- BRAIN -->
+  <rect class="fill-purple stroke-purple" x="220" y="55" width="240" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-purple" x="340" y="74" text-anchor="middle" dominant-baseline="central">Brain (Ollama)</text>
+  <text class="ts sub-purple" x="340" y="93" text-anchor="middle" dominant-baseline="central">Qwen 3 14B local</text>
+
+  <line class="arr-line" x1="340" y1="111" x2="340" y2="140" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- PROVIDER LAYER -->
+  <rect class="fill-gray stroke-gray" x="190" y="140" width="300" height="44" rx="8" stroke-width="0.5"/>
+  <text class="th title-gray" x="340" y="162" text-anchor="middle" dominant-baseline="central">Provider abstraction layer</text>
+
+  <line class="arr-line" x1="340" y1="184" x2="340" y2="213" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- CORE ENGINE container -->
+  <rect class="fill-teal stroke-teal" x="120" y="213" width="440" height="110" rx="14" stroke-width="0.5"/>
+  <text class="th title-teal" x="340" y="237" text-anchor="middle" dominant-baseline="central">Core engine</text>
+
+  <!-- Inner core boxes -->
+  <rect class="fill-teal stroke-teal" x="140" y="250" width="120" height="56" rx="6" stroke-width="0.5"/>
+  <text class="th title-teal" x="200" y="270" text-anchor="middle" dominant-baseline="central">brain.py</text>
+  <text class="ts sub-teal" x="200" y="289" text-anchor="middle" dominant-baseline="central">Tool loop</text>
+
+  <rect class="fill-teal stroke-teal" x="280" y="250" width="120" height="56" rx="6" stroke-width="0.5"/>
+  <text class="th title-teal" x="340" y="270" text-anchor="middle" dominant-baseline="central">memory.py</text>
+  <text class="ts sub-teal" x="340" y="289" text-anchor="middle" dominant-baseline="central">SQLite</text>
+
+  <rect class="fill-teal stroke-teal" x="420" y="250" width="120" height="56" rx="6" stroke-width="0.5"/>
+  <text class="th title-teal" x="480" y="270" text-anchor="middle" dominant-baseline="central">tool_router.py</text>
+  <text class="ts sub-teal" x="480" y="289" text-anchor="middle" dominant-baseline="central">Dispatch</text>
+
+  <line class="arr-line" x1="340" y1="323" x2="340" y2="365" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- MODULES -->
+  <text class="section-heading" x="340" y="385" text-anchor="middle">Modules</text>
+
+  <!-- MVP label -->
+  <text class="ts label-success" x="610" y="395" text-anchor="end">MVP</text>
+
+  <!-- MVP modules -->
+  <rect class="fill-coral stroke-coral" x="60" y="400" width="160" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-coral" x="140" y="419" text-anchor="middle" dominant-baseline="central">Web search</text>
+  <text class="ts sub-coral" x="140" y="438" text-anchor="middle" dominant-baseline="central">DuckDuckGo</text>
+
+  <rect class="fill-coral stroke-coral" x="240" y="400" width="160" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-coral" x="320" y="419" text-anchor="middle" dominant-baseline="central">System monitor</text>
+  <text class="ts sub-coral" x="320" y="438" text-anchor="middle" dominant-baseline="central">CPU/RAM/GPU</text>
+
+  <rect class="fill-coral stroke-coral" x="420" y="400" width="160" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-coral" x="500" y="419" text-anchor="middle" dominant-baseline="central">Todo / reminders</text>
+  <text class="ts sub-coral" x="500" y="438" text-anchor="middle" dominant-baseline="central">SQLite + scheduler</text>
+
+  <!-- Future label -->
+  <text class="ts label-muted" x="610" y="470" text-anchor="end">Future</text>
+
+  <!-- Future modules -->
+  <rect class="fill-gray stroke-gray" x="60" y="475" width="120" height="44" rx="8" stroke-width="0.5"/>
+  <text class="th title-gray" x="120" y="497" text-anchor="middle" dominant-baseline="central">Smart home</text>
+
+  <rect class="fill-gray stroke-gray" x="195" y="475" width="120" height="44" rx="8" stroke-width="0.5"/>
+  <text class="th title-gray" x="255" y="497" text-anchor="middle" dominant-baseline="central">News</text>
+
+  <rect class="fill-gray stroke-gray" x="330" y="475" width="120" height="44" rx="8" stroke-width="0.5"/>
+  <text class="th title-gray" x="390" y="497" text-anchor="middle" dominant-baseline="central">Spotify</text>
+
+  <rect class="fill-gray stroke-gray" x="465" y="475" width="135" height="44" rx="8" stroke-width="0.5"/>
+  <text class="th title-gray" x="532" y="497" text-anchor="middle" dominant-baseline="central">Calendar / Email</text>
+
+  <!-- VOICE PIPELINE -->
+  <line class="arr-line" x1="340" y1="535" x2="340" y2="565" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="fill-blue stroke-blue" x="80" y="565" width="520" height="110" rx="14" stroke-width="0.5"/>
+  <text class="th title-blue" x="340" y="589" text-anchor="middle" dominant-baseline="central">Voice pipeline</text>
+
+  <rect class="fill-blue stroke-blue" x="100" y="600" width="150" height="56" rx="6" stroke-width="0.5"/>
+  <text class="th title-blue" x="175" y="619" text-anchor="middle" dominant-baseline="central">Faster-Whisper</text>
+  <text class="ts sub-blue" x="175" y="638" text-anchor="middle" dominant-baseline="central">STT (local GPU)</text>
+
+  <rect class="fill-blue stroke-blue" x="265" y="600" width="150" height="56" rx="6" stroke-width="0.5"/>
+  <text class="th title-blue" x="340" y="619" text-anchor="middle" dominant-baseline="central">Coqui XTTS v2</text>
+  <text class="ts sub-blue" x="340" y="638" text-anchor="middle" dominant-baseline="central">TTS (local GPU)</text>
+
+  <rect class="fill-blue stroke-blue" x="430" y="600" width="150" height="56" rx="6" stroke-width="0.5"/>
+  <text class="th title-blue" x="505" y="619" text-anchor="middle" dominant-baseline="central">Wake word</text>
+  <text class="ts sub-blue" x="505" y="638" text-anchor="middle" dominant-baseline="central">"Hey Nova"</text>
+
+  <!-- PERSONALITY -->
+  <line class="arr-line" x1="340" y1="690" x2="340" y2="720" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="fill-pink stroke-pink" x="140" y="720" width="400" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-pink" x="340" y="739" text-anchor="middle" dominant-baseline="central">Personality</text>
+  <text class="ts sub-pink" x="340" y="758" text-anchor="middle" dominant-baseline="central">Witty + playful, female, EN / NL / RU</text>
+
+  <!-- CONFIG -->
+  <line class="arr-line" x1="340" y1="790" x2="340" y2="820" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect class="fill-amber stroke-amber" x="120" y="820" width="190" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-amber" x="215" y="839" text-anchor="middle" dominant-baseline="central">.env</text>
+  <text class="ts sub-amber" x="215" y="858" text-anchor="middle" dominant-baseline="central">Secrets + API keys</text>
+
+  <rect class="fill-amber stroke-amber" x="340" y="820" width="190" height="56" rx="8" stroke-width="0.5"/>
+  <text class="th title-amber" x="435" y="839" text-anchor="middle" dominant-baseline="central">config.yaml</text>
+  <text class="ts sub-amber" x="435" y="858" text-anchor="middle" dominant-baseline="central">Settings + toggles</text>
+</svg>
