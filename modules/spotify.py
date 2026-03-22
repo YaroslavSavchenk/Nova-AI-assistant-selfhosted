@@ -218,18 +218,6 @@ class SpotifyPlayModule(NovaModule):
                     return f"No track found for: {query}"
                 item = items[0]
                 sp.start_playback(device_id=device_id, uris=[item["uri"]])
-
-                # Fill the queue with more tracks by the same artist so skipping works.
-                try:
-                    artist_name = item["artists"][0]["name"]
-                    more = sp.search(q=f"artist:{artist_name}", type="track", limit=6)
-                    more_tracks = more.get("tracks", {}).get("items", [])
-                    for t in more_tracks:
-                        if t["uri"] != item["uri"]:
-                            sp.add_to_queue(t["uri"], device_id=device_id)
-                except Exception:
-                    pass  # Queue fill is best-effort; never affect main playback response
-
                 return f"Now playing: {item['name']} by {item['artists'][0]['name']}"
 
             elif search_type == "artist":
@@ -606,3 +594,57 @@ class SpotifyQueueModule(NovaModule):
         except Exception as exc:
             logger.exception("SpotifyQueueModule error")
             return f"Failed to queue track: {exc}"
+
+
+class SpotifyViewQueueModule(NovaModule):
+    """View the current Spotify playback queue."""
+
+    name: str = "spotify_view_queue"
+    description: str = (
+        "Show what's coming up in the Spotify queue. Use this when the user asks "
+        "'what's in the queue', 'what's next', 'show my queue', or wants to manage upcoming tracks."
+    )
+    parameters: dict = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+
+    async def run(self, **kwargs) -> str:
+        try:
+            sp = _get_client()
+            if sp is None:
+                return "Spotify is not configured. Run `python3 scripts/spotify_auth.py` first."
+
+            data = sp.queue()
+            if not data:
+                return "Nothing is currently playing on Spotify."
+
+            lines = []
+
+            current = data.get("currently_playing")
+            if current:
+                name = current.get("name", "Unknown")
+                artist = current.get("artists", [{}])[0].get("name", "Unknown")
+                lines.append(f"Now playing: {name} by {artist}")
+
+            queue = data.get("queue", [])
+            if not queue:
+                lines.append("Queue is empty — nothing coming up next.")
+            else:
+                lines.append(f"\nUp next ({len(queue)} track{'s' if len(queue) != 1 else ''}):")
+                for i, track in enumerate(queue[:10], 1):
+                    name = track.get("name", "Unknown")
+                    artist = track.get("artists", [{}])[0].get("name", "Unknown")
+                    lines.append(f"  {i}. {name} by {artist}")
+                if len(queue) > 10:
+                    lines.append(f"  ... and {len(queue) - 10} more")
+
+            return "\n".join(lines)
+
+        except spotipy.exceptions.SpotifyException as exc:
+            logger.exception("SpotifyViewQueueModule error")
+            return f"Spotify error: {exc}"
+        except Exception as exc:
+            logger.exception("SpotifyViewQueueModule error")
+            return f"Failed to get queue: {exc}"

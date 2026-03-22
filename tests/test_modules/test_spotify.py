@@ -1,6 +1,7 @@
 """
 Tests for modules/spotify.py — SpotifyPlayModule, SpotifyControlModule,
-SpotifyNowPlayingModule, SpotifyMyPlaylistsModule.
+SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule,
+SpotifyViewQueueModule.
 """
 
 import pytest
@@ -8,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from modules.spotify import (
     SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule,
-    SpotifyMyPlaylistsModule, SpotifyQueueModule,
+    SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule,
 )
 
 
@@ -42,6 +43,11 @@ def queue_module():
     return SpotifyQueueModule()
 
 
+@pytest.fixture
+def view_queue_module():
+    return SpotifyViewQueueModule()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -67,15 +73,6 @@ def _fake_track_search(name="Bohemian Rhapsody", artist="Queen", uri="spotify:tr
         }
     }
 
-
-def _fake_artist_track_fill(artist="Queen", playing_uri="spotify:track:abc123"):
-    """Return a fake search result with 6 tracks (including the currently playing one)."""
-    tracks = [
-        {"uri": playing_uri, "name": "Playing Track", "artists": [{"name": artist}]},
-    ]
-    for i in range(1, 6):
-        tracks.append({"uri": f"spotify:track:fill{i}", "name": f"Fill Track {i}", "artists": [{"name": artist}]})
-    return {"tracks": {"items": tracks}}
 
 
 def _fake_artist_search(name="Arctic Monkeys", artist_id="artist123"):
@@ -161,11 +158,7 @@ def _fake_now_playing(track="Bohemian Rhapsody", artist="Queen", album="A Night 
 
 async def test_play_track_success(play_module):
     sp = _mock_sp()
-    # First call: track search. Second call: artist fill search.
-    sp.search.side_effect = [
-        _fake_track_search(),
-        _fake_artist_track_fill(),
-    ]
+    sp.search.return_value = _fake_track_search()
 
     with patch("modules.spotify._get_client", return_value=sp):
         result = await play_module.run(query="Bohemian Rhapsody", type="track")
@@ -173,42 +166,6 @@ async def test_play_track_success(play_module):
     sp.start_playback.assert_called_once()
     assert "Bohemian Rhapsody" in result
     assert "Queen" in result
-
-
-async def test_play_track_queues_artist_fill(play_module):
-    """After playing a single track, up to 5 other tracks by the same artist are queued."""
-    sp = _mock_sp()
-    playing_uri = "spotify:track:abc123"
-    sp.search.side_effect = [
-        _fake_track_search(uri=playing_uri),
-        _fake_artist_track_fill(artist="Queen", playing_uri=playing_uri),
-    ]
-
-    with patch("modules.spotify._get_client", return_value=sp):
-        result = await play_module.run(query="Bohemian Rhapsody", type="track")
-
-    # Exactly 5 fill tracks should be queued (the 6th result is the playing track, excluded)
-    assert sp.add_to_queue.call_count == 5
-    queued_uris = [call.args[0] for call in sp.add_to_queue.call_args_list]
-    assert playing_uri not in queued_uris
-    assert "Bohemian Rhapsody" in result
-
-
-async def test_play_track_queue_fill_failure_silent(play_module):
-    """If add_to_queue raises (e.g. non-Premium), the error is silently ignored."""
-    sp = _mock_sp()
-    sp.search.side_effect = [
-        _fake_track_search(),
-        _fake_artist_track_fill(),
-    ]
-    sp.add_to_queue.side_effect = RuntimeError("Premium required")
-
-    with patch("modules.spotify._get_client", return_value=sp):
-        result = await play_module.run(query="Bohemian Rhapsody", type="track")
-
-    # Main response is unaffected
-    assert "Bohemian Rhapsody" in result
-    assert "error" not in result.lower()
 
 
 async def test_play_artist_success(play_module):
@@ -259,16 +216,13 @@ async def test_play_playlist_success(play_module):
 
 async def test_play_defaults_to_track_type(play_module):
     sp = _mock_sp()
-    sp.search.side_effect = [
-        _fake_track_search(),
-        _fake_artist_track_fill(),
-    ]
+    sp.search.return_value = _fake_track_search()
 
     with patch("modules.spotify._get_client", return_value=sp):
         await play_module.run(query="some song")
 
-    first_call = sp.search.call_args_list[0]
-    assert first_call.kwargs.get("type") == "track" or "track" in str(first_call)
+    call_kwargs = sp.search.call_args
+    assert call_kwargs.kwargs.get("type") == "track" or "track" in str(call_kwargs)
 
 
 async def test_play_no_results(play_module):
@@ -679,17 +633,12 @@ async def test_queue_parses_by_format(queue_module):
 async def test_play_track_parses_by_format(play_module):
     """'Title by Artist' queries are reformatted to track:Title artist:Artist before searching."""
     sp = _mock_sp()
-    sp.search.side_effect = [
-        _fake_track_search(name="I'm Happy", artist="The Goo Goo Dolls", uri="spotify:track:imhappy"),
-        _fake_artist_track_fill(artist="The Goo Goo Dolls", playing_uri="spotify:track:imhappy"),
-    ]
+    sp.search.return_value = _fake_track_search(name="I'm Happy", artist="The Goo Goo Dolls", uri="spotify:track:imhappy")
 
     with patch("modules.spotify._get_client", return_value=sp):
         result = await play_module.run(query="I'm Happy by The Goo Goo Dolls", type="track")
 
-    # call_args_list[0] is the first (track) search; subsequent calls are the best-effort queue fill
-    first_call = sp.search.call_args_list[0]
-    q_used = first_call.kwargs.get("q") or first_call.args[0]
+    q_used = sp.search.call_args.kwargs.get("q")
     assert "track:I'm Happy" in q_used
     assert "artist:The Goo Goo Dolls" in q_used
     assert "I'm Happy" in result
@@ -699,16 +648,12 @@ async def test_play_track_parses_by_format(play_module):
 async def test_play_track_parses_dash_format(play_module):
     """'Title - Artist' queries are also reformatted to field filter syntax."""
     sp = _mock_sp()
-    sp.search.side_effect = [
-        _fake_track_search(name="Stairway to Heaven", artist="Led Zeppelin", uri="spotify:track:stairway"),
-        _fake_artist_track_fill(artist="Led Zeppelin", playing_uri="spotify:track:stairway"),
-    ]
+    sp.search.return_value = _fake_track_search(name="Stairway to Heaven", artist="Led Zeppelin", uri="spotify:track:stairway")
 
     with patch("modules.spotify._get_client", return_value=sp):
         result = await play_module.run(query="Stairway to Heaven - Led Zeppelin", type="track")
 
-    first_call = sp.search.call_args_list[0]
-    q_used = first_call.kwargs.get("q") or first_call.args[0]
+    q_used = sp.search.call_args.kwargs.get("q")
     assert "track:Stairway to Heaven" in q_used
     assert "artist:Led Zeppelin" in q_used
     assert "Stairway to Heaven" in result
@@ -717,15 +662,96 @@ async def test_play_track_parses_dash_format(play_module):
 async def test_play_track_plain_query_unchanged(play_module):
     """A plain track name (no 'by' or '-') is passed to search without modification."""
     sp = _mock_sp()
-    sp.search.side_effect = [
-        _fake_track_search(name="Bohemian Rhapsody", artist="Queen"),
-        _fake_artist_track_fill(artist="Queen"),
-    ]
+    sp.search.return_value = _fake_track_search(name="Bohemian Rhapsody", artist="Queen")
 
     with patch("modules.spotify._get_client", return_value=sp):
         await play_module.run(query="Bohemian Rhapsody", type="track")
 
-    # First search call should receive the plain query with no field filter prefix
-    first_call = sp.search.call_args_list[0]
-    q_used = first_call.kwargs.get("q") or first_call.args[0]
+    q_used = sp.search.call_args.kwargs.get("q")
     assert q_used == "Bohemian Rhapsody"
+
+# ---------------------------------------------------------------------------
+# SpotifyViewQueueModule tests
+# ---------------------------------------------------------------------------
+
+
+def _fake_queue(current_track="Believer", current_artist="Imagine Dragons", next_tracks=None):
+    if next_tracks is None:
+        next_tracks = [
+            {"name": "Mistake", "artists": [{"name": "Stellar"}]},
+            {"name": "Thunder", "artists": [{"name": "Imagine Dragons"}]},
+        ]
+    return {
+        "currently_playing": {
+            "name": current_track,
+            "artists": [{"name": current_artist}],
+        },
+        "queue": next_tracks,
+    }
+
+
+async def test_view_queue_shows_current_and_upcoming(view_queue_module):
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue()
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await view_queue_module.run()
+
+    assert "Believer" in result
+    assert "Imagine Dragons" in result
+    assert "Mistake" in result
+    assert "Stellar" in result
+    assert "Thunder" in result
+
+
+async def test_view_queue_empty_queue(view_queue_module):
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue(next_tracks=[])
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await view_queue_module.run()
+
+    assert "empty" in result.lower() or "nothing" in result.lower()
+    assert "Believer" in result  # now playing still shown
+
+
+async def test_view_queue_nothing_playing(view_queue_module):
+    sp = _mock_sp()
+    sp.queue.return_value = None
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await view_queue_module.run()
+
+    assert "nothing" in result.lower() or "not playing" in result.lower()
+
+
+async def test_view_queue_caps_at_ten(view_queue_module):
+    """Queue display is capped at 10 tracks with overflow note."""
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue(
+        next_tracks=[{"name": f"Song {i}", "artists": [{"name": "Artist"}]} for i in range(15)]
+    )
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await view_queue_module.run()
+
+    assert "10." in result
+    assert "11." not in result
+    assert "5 more" in result
+
+
+async def test_view_queue_not_configured(view_queue_module):
+    with patch("modules.spotify._get_client", return_value=None):
+        result = await view_queue_module.run()
+
+    assert "not configured" in result.lower()
+
+
+async def test_view_queue_exception_returns_error_string(view_queue_module):
+    sp = _mock_sp()
+    sp.queue.side_effect = RuntimeError("connection lost")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await view_queue_module.run()
+
+    assert "failed" in result.lower() or "error" in result.lower()
