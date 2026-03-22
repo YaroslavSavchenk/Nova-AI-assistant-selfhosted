@@ -136,7 +136,7 @@ class Listener:
         max_frames = int(max_duration * 1000 / frame_ms)
         silence_frames_needed = int(silence_seconds * 1000 / frame_ms)
 
-        vad = webrtcvad.Vad(2)  # 0=least, 3=most aggressive
+        vad = webrtcvad.Vad(3)  # 0=least, 3=most aggressive — 3 ignores non-speech sounds
 
         recorded: list = []
         silence_frames = 0
