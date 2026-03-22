@@ -20,9 +20,11 @@ _WSL_PULSE_SERVER = "/mnt/wslg/PulseServer"
 if Path(_WSL_PULSE_SERVER).exists() and "PULSE_SERVER" not in os.environ:
     os.environ["PULSE_SERVER"] = f"unix:{_WSL_PULSE_SERVER}"
 
-# Suppress onnxruntime CUDA provider warning (we intentionally run on CPU)
+# Suppress known noisy warnings
 import warnings
 warnings.filterwarnings("ignore", message=".*CUDAExecutionProvider.*")
+warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
+warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
 
 from core.config_loader import load_config
 from core.memory import Memory
@@ -146,7 +148,8 @@ async def voice_repl(
         tts_lang = voice_cfg.get("tts", {}).get("language", "en")
         await speaker.speak(response, language=tts_lang)
 
-    print("Nova voice mode active. Say the wake word to start, or Ctrl-C to exit.\n")
+    print("Nova voice mode active. Loading wake word model...", flush=True)
+    print("(First run downloads ~39 MB — cached after that)\n")
 
     try:
         if wake_enabled:
@@ -216,8 +219,8 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         logging.getLogger("primp").setLevel(logging.WARNING)
-        logging.getLogger("faster_whisper").setLevel(logging.WARNING)
-        logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+        logging.getLogger("faster_whisper").setLevel(logging.ERROR)
+        logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
         logging.getLogger("voice.wake_word").setLevel(logging.WARNING)
 
 

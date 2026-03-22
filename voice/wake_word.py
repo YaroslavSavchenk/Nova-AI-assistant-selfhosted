@@ -57,7 +57,7 @@ class WakeWordDetector:
             from faster_whisper import WhisperModel  # noqa: PLC0415
             log.info("Loading Whisper tiny model for wake word detection …")
             self._whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
-            log.info("Wake word detector ready — say 'Hey Nova'.")
+            print("Say 'Hey Nova' to activate.\n", flush=True)
             return True
         except Exception as exc:
             log.warning("Failed to load Whisper for wake word detection: %s", exc)
