@@ -567,7 +567,7 @@ async def test_queue_track_success(queue_module):
     with patch("modules.spotify._get_client", return_value=sp):
         result = await queue_module.run(query="Stairway to Heaven")
 
-    sp.add_to_queue.assert_called_once_with("spotify:track:stairway", device_id="test-device-id")
+    sp.add_to_queue.assert_called_once_with("spotify:track:stairway")
     assert "Stairway to Heaven" in result
     assert "Led Zeppelin" in result
 

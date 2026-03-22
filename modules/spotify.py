@@ -283,12 +283,15 @@ class SpotifyControlModule(NovaModule):
     name: str = "spotify_control"
     description: str = (
         "Control Spotify playback. MUST be called for any playback action — never simulate or assume the result. "
+        "Never respond with text describing a skip, pause, or resume — always call this tool first, then respond with the actual result. "
         "Use this to: pause, resume, skip, skip song, next song, next track, go to next, go forward, "
         "previous song, previous track, go back, go to previous, set volume, change volume, "
         "turn shuffle on/off, or toggle shuffle. "
         "Trigger phrases that require this tool: 'skip', 'next', 'next song', 'skip song', "
-        "'go to next', 'previous', 'go back', 'last song', 'pause', 'resume', 'continue', "
-        "'volume up', 'volume down', 'set volume', 'shuffle'."
+        "'skip this', 'skip track', 'go to next', 'go forward', 'previous', 'go back', 'last song', "
+        "'pause', 'pause this', 'stop music', 'resume', 'continue', 'unpause', "
+        "'volume up', 'volume down', 'set volume', 'louder', 'quieter', 'shuffle', 'turn on shuffle', 'turn off shuffle'. "
+        "Do not say 'I'll skip now' or 'Skipping...' — call this tool and report what it returns."
     )
     parameters: dict = {
         "type": "object",
@@ -546,8 +549,11 @@ class SpotifyQueueModule(NovaModule):
 
     name: str = "spotify_queue"
     description: str = (
-        "Add a track to the Spotify playback queue. Use this when the user says "
-        "'queue', 'add to queue', or 'play X next' without stopping the current song."
+        "Add a track to the Spotify playback queue. "
+        "MUST be called when the user asks to queue a song — never confirm a track was queued without calling this tool first. "
+        "Always call this tool when the user says 'queue', 'add to queue', 'add X to queue', "
+        "'put X in the queue', or 'play X next' without stopping the current song. "
+        "Do not say 'Added X to queue' without calling this tool and reporting its actual result."
     )
     parameters: dict = {
         "type": "object",
@@ -570,10 +576,6 @@ class SpotifyQueueModule(NovaModule):
             if sp is None:
                 return "Spotify is not configured. Run `python3 scripts/spotify_auth.py` first."
 
-            device_id = _get_device_id(sp)
-            if device_id is None:
-                return "No Spotify device found. Open Spotify on your PC first."
-
             search_query = _parse_track_query(query)
             results = sp.search(q=search_query, type="track", limit=1)
             items = results.get("tracks", {}).get("items", [])
@@ -581,7 +583,7 @@ class SpotifyQueueModule(NovaModule):
                 return f"No track found for: {query}"
 
             track = items[0]
-            sp.add_to_queue(track["uri"], device_id=device_id)
+            sp.add_to_queue(track["uri"])
             return f"Queued: {track['name']} by {track['artists'][0]['name']}"
 
         except spotipy.exceptions.SpotifyException as exc:
