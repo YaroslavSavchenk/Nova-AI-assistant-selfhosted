@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 2 complete — starting Phase 3 (News & Research)
+## Current status: Phase 5 complete — starting Phase 6 (Google Calendar)
 
 ---
 
@@ -80,7 +80,7 @@ Add the voice interface. This is where Nova goes from chatbot to assistant.
 
 ---
 
-## Phase 3 — News & Research `[NEXT]`
+## Phase 3 — News & Research `[COMPLETE]`
 
 Give Nova better research capabilities beyond a single web search.
 
@@ -100,45 +100,94 @@ Give Nova better research capabilities beyond a single web search.
 
 ---
 
-## Phase 4 — Spotify `[PLANNED]`
+## Phase 4 — Spotify `[COMPLETE]`
 
 Music control through natural language.
 
-**Module:** `modules/spotify.py`
+**Module:** `modules/spotify/` (package)
 
-**Integration:** Spotify Web API (OAuth 2.0)
+**Integration:** Spotify Web API (OAuth 2.0 via spotipy)
 
 **Capabilities:**
-- Play artist, album, track, or playlist
-- Pause, skip, previous
-- Query current playback ("what's playing?")
-- Add to queue
+- Play track, artist, album, or playlist by name (album context for correct queue behavior)
+- Play user's own playlists (fuzzy name matching) or public playlists
+- Play Liked Songs collection
+- Pause, resume, skip, previous (with repeat count)
+- Skip directly to a named song in the queue (fuzzy + `&`/`and` normalization)
+- Volume control (0–100)
+- Shuffle toggle (on / off / toggle)
+- Query current playback — track, artist, album, progress
+- Add a track to the queue ("play X next")
+- View the current queue (deduplicated, up to 5 tracks)
+- List all user playlists (created + saved/followed), with Liked Songs count
+
+**Tools registered:**
+| Tool | Description |
+|------|-------------|
+| `spotify_play` | Search and play track / artist / album / playlist |
+| `spotify_control` | Pause, resume, next, previous, volume, shuffle (with optional count) |
+| `spotify_now_playing` | Get current track info and progress |
+| `spotify_queue` | Add a track to the playback queue |
+| `spotify_view_queue` | Show what's currently in the playback queue |
+| `spotify_skip_to` | Skip forward to a specific song by name |
+| `spotify_my_playlists` | List user's playlists |
 
 **Config needed in `.env`:** `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`
 
-**OAuth note:** Initial auth flow requires a browser — run `python -m modules.spotify --auth` once to get a refresh token, then store it.
+**OAuth note:** Initial auth flow requires a browser — run `python3 scripts/spotify_auth.py` once to authorize and cache the token.
 
 ---
 
-## Phase 5 — Calendar & Email `[PLANNED]`
+## Phase 5 — Spotify Lyrics Search `[COMPLETE]`
 
-Google Workspace integration. Highest privacy sensitivity — requires OAuth consent.
+Find songs from lyric snippets and confirm before playing.
 
-**Modules:** `modules/calendar_tool.py`, `modules/email_tool.py`
+**Problem:** `spotify_play` searches by title/artist only — half-remembered song names, foreign lyrics, or vague descriptions all fail. This phase lets the user hum a line and have Nova identify and confirm the track.
+
+**Module:** `modules/spotify/lyrics_search.py`
+
+**Tool registered:**
+
+| Tool | Description |
+|------|-------------|
+| `spotify_lyrics_search` | Identify a song from a lyric snippet via Genius API, return top candidates for confirmation |
+
+**How the flow works:**
+1. User says a lyric (e.g. *"play that song that goes 'is this the real life'"*)
+2. Nova calls `spotify_lyrics_search` with the snippet
+3. Module hits Genius search API, returns top 1–3 candidates (title + artist)
+4. Nova asks: *"Found: Bohemian Rhapsody by Queen — shall I play it?"*
+5. User confirms → LLM calls existing `spotify_play` tool
+6. No changes to `brain.py` or `tool_router.py` — confirmation is pure conversational flow
+
+**Tech stack:**
+- **Genius API** — `GET https://api.genius.com/search?q=<lyric>` with Bearer auth
+- `httpx` — already in `requirements.txt`, no new dependencies
+
+**Config needed in `.env`:** `GENIUS_ACCESS_TOKEN`
+
+**Tests:** `tests/test_modules/test_spotify_lyrics_search.py`
+
+---
+
+## Phase 6 — Google Calendar `[PLANNED]`
+
+Google Calendar integration via OAuth 2.0.
+
+**Module:** `modules/calendar_tool.py`
 
 **Capabilities:**
-- Read upcoming events
-- Create and delete calendar events
-- Read recent emails (unread, filtered by sender/subject)
-- Send emails (with confirmation before sending)
+- Read upcoming events (today, this week, or by date range)
+- Create calendar events
+- Delete calendar events
 
 **Config needed:** Google OAuth credentials (`credentials.json`, stored securely outside the repo)
 
-**Safety rule:** Email sending must always show a preview and ask "send this?" before dispatching. Never auto-send.
+**Note:** Email (Gmail) intentionally excluded — deferred to backlog.
 
 ---
 
-## Phase 6 — Memory Upgrade `[PLANNED]`
+## Phase 7 — Memory Upgrade `[PLANNED]`
 
 Upgrade the SQLite conversation log to a full semantic memory system.
 
@@ -159,7 +208,7 @@ Upgrade the SQLite conversation log to a full semantic memory system.
 
 ---
 
-## Phase 7 — Provider Abstraction `[PLANNED]`
+## Phase 8 — Provider Abstraction `[PLANNED]`
 
 Enable swapping the LLM brain from Ollama to Claude or OpenAI.
 
@@ -178,7 +227,7 @@ Enable swapping the LLM brain from Ollama to Claude or OpenAI.
 
 ---
 
-## Phase 8 — PC Control `[PLANNED]`
+## Phase 9 — PC Control `[PLANNED]`
 
 Let Nova interact with the local machine — run commands, control apps, and act as an agent that can operate your dev environment.
 
@@ -202,7 +251,7 @@ Let Nova interact with the local machine — run commands, control apps, and act
 
 ---
 
-## Phase 9 — Persona `[PLANNED]`
+## Phase 10 — Persona `[PLANNED]`
 
 Give Nova a fully customizable personality layer — name, voice, tone, language defaults, and behavioral traits.
 
@@ -227,6 +276,7 @@ Give Nova a fully customizable personality layer — name, voice, tone, language
 
 These are not scheduled but worth keeping track of:
 
+- **Email (Gmail)** — Read recent emails, send with mandatory confirmation preview. Excluded from Phase 6 (Calendar) by design — highest privacy risk, revisit later.
 - **Smart Home** — Home Assistant REST API integration (lights, switches, scenes, sensors). Config: `HA_URL`, `HA_TOKEN`. Module: `modules/smart_home.py`. Skipped Phase 3 — no HA setup yet.
 - **File assistant** — read, summarize, and answer questions about local files (PDFs, text, code)
 - **Proactive notifications** — Nova initiates contact on scheduled triggers (morning briefing, reminders)

@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 
 # WSL2: PulseAudio is served by WSLg — point sounddevice/portaudio at it
@@ -35,7 +36,7 @@ from modules.web_search import WebSearchModule
 from modules.system_monitor import SystemMonitorModule
 from modules.todo_reminders import TodoModule
 from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule
-from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule
+from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 
 
 # ---------------------------------------------------------------------------
@@ -197,8 +198,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--session",
         type=str,
-        default="default",
-        help="Conversation session identifier",
+        default=None,
+        help=(
+            "Conversation session identifier. If omitted, a new session is "
+            "started each run (no history bleed). Pass a name to resume a "
+            "persistent named session, e.g. --session work."
+        ),
     )
     return parser.parse_args()
 
@@ -226,6 +231,9 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
 async def main() -> None:
     args = parse_args()
 
+    # Determine session ID. None means fresh session each run (no history bleed).
+    session_id = args.session if args.session else f"run-{uuid.uuid4().hex[:8]}"
+
     # Load config
     config = load_config("config.yaml")
 
@@ -237,7 +245,7 @@ async def main() -> None:
     )
 
     logger = logging.getLogger(__name__)
-    logger.debug("Config loaded. Session: %s", args.session)
+    logger.debug("Config loaded. Session: %s", session_id)
 
     # Load system prompt
     prompt_path = Path(__file__).parent / "core" / "prompts" / "system.md"
@@ -279,7 +287,10 @@ async def main() -> None:
         tool_router.register(SpotifyNowPlayingModule())
         tool_router.register(SpotifyMyPlaylistsModule())
         tool_router.register(SpotifyQueueModule())
-        logger.debug("Registered module: spotify (spotify_play, spotify_control, spotify_now_playing, spotify_my_playlists, spotify_queue)")
+        tool_router.register(SpotifyViewQueueModule())
+        tool_router.register(SpotifySkipToModule())
+        tool_router.register(SpotifyLyricsSearchModule())
+        logger.debug("Registered module: spotify (spotify_play, spotify_control, spotify_now_playing, spotify_my_playlists, spotify_queue, spotify_view_queue, spotify_lyrics_search)")
 
     brain = Brain(
         config=config,
@@ -315,14 +326,14 @@ async def main() -> None:
 
         await voice_repl(
             brain=brain,
-            session_id=args.session,
+            session_id=session_id,
             listener=listener,
             speaker=speaker,
             wake_detector=wake_detector,
             voice_cfg=voice_cfg,
         )
     else:
-        await repl(brain, session_id=args.session)
+        await repl(brain, session_id=session_id)
 
 
 if __name__ == "__main__":
