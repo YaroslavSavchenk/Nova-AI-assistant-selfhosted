@@ -15,7 +15,7 @@ voice:
     model_size: base        # "base", "small", "medium", "large-v3", "distil-large-v3"
     language: null          # null = auto-detect, or "en", "nl", "ru"
     device: cpu             # "cpu" recommended to save VRAM for the LLM
-    listen_duration: 5.0    # Seconds to record after wake word fires
+    silence_seconds: 5.0    # Seconds of silence before Nova stops listening and responds
   tts:
     model: tts_models/multilingual/multi-dataset/xtts_v2
     speaker_wav: null       # Path to reference audio for voice cloning, or null for default

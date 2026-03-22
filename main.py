@@ -120,15 +120,16 @@ async def voice_repl(
     """
     logger = logging.getLogger(__name__)
     stop_event = asyncio.Event()
-    listen_duration: float = voice_cfg.get("stt", {}).get("listen_duration", 5.0)
     wake_cfg = voice_cfg.get("wake_word", {})
     wake_enabled = wake_cfg.get("enabled", True)
 
+    silence_seconds: float = voice_cfg.get("stt", {}).get("silence_seconds", 5.0)
+
     async def handle_interaction() -> None:
-        """Record speech, get response, speak it."""
-        print("Listening...", end="\r", flush=True)
-        user_text = await listener.listen_once(duration=listen_duration)
-        print(" " * 20, end="\r")
+        """Record speech until silence, get response, speak it."""
+        print("Listening...          ", end="\r", flush=True)
+        user_text = await listener.listen_until_silence(silence_seconds=silence_seconds)
+        print(" " * 30, end="\r")
 
         if not user_text.strip():
             logger.debug("Empty transcription — ignoring.")
@@ -215,6 +216,9 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         logging.getLogger("primp").setLevel(logging.WARNING)
+        logging.getLogger("faster_whisper").setLevel(logging.WARNING)
+        logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+        logging.getLogger("voice.wake_word").setLevel(logging.WARNING)
 
 
 async def main() -> None:

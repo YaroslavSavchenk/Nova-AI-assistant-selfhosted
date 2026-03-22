@@ -113,6 +113,110 @@ class Listener:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(_executor, self._transcribe_sync, audio_path)
 
+    def _listen_until_silence_sync(
+        self,
+        silence_seconds: float = 5.0,
+        sample_rate: int = 16000,
+        energy_threshold: float = 0.01,
+        max_duration: float = 30.0,
+    ) -> "numpy.ndarray":  # noqa: F821
+        """
+        Record until the user has been silent for *silence_seconds*.
+
+        Each chunk (~0.1 s) is checked for energy. If energy > threshold,
+        the silence timer resets. Recording stops when silence_seconds
+        elapses with no speech, or max_duration is reached.
+        """
+        import numpy as np  # noqa: PLC0415
+        import sounddevice as sd  # noqa: PLC0415
+
+        chunk_size = int(sample_rate * 0.1)  # 100 ms chunks
+        max_chunks = int(max_duration * sample_rate / chunk_size)
+        silence_chunks_needed = int(silence_seconds * sample_rate / chunk_size)
+
+        recorded: list = []
+        silence_chunks = 0
+
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype="float32", blocksize=chunk_size) as stream:
+            log.debug("VAD recording started (silence threshold=%.2f s)…", silence_seconds)
+            for _ in range(max_chunks):
+                chunk, _ = stream.read(chunk_size)
+                chunk = np.squeeze(chunk)
+                recorded.append(chunk)
+
+                rms = float(np.sqrt(np.mean(chunk ** 2)))
+                if rms > energy_threshold:
+                    silence_chunks = 0  # speech detected — reset timer
+                else:
+                    silence_chunks += 1
+                    if silence_chunks >= silence_chunks_needed:
+                        break  # enough silence — done
+
+        return np.concatenate(recorded) if recorded else np.array([], dtype="float32")
+
+    async def listen_until_silence(
+        self,
+        silence_seconds: float = 5.0,
+        sample_rate: int = 16000,
+        energy_threshold: float = 0.01,
+        max_duration: float = 30.0,
+    ) -> str:
+        """
+        Record from the microphone until *silence_seconds* of silence,
+        then transcribe and return the text.
+
+        The silence timer resets every time speech is detected, so
+        speaking within the window extends the recording naturally.
+
+        Args:
+            silence_seconds:  Seconds of silence that trigger end of recording.
+            sample_rate:      Sampling rate in Hz.
+            energy_threshold: RMS energy above which audio is considered speech.
+            max_duration:     Hard cap on recording length in seconds.
+
+        Returns:
+            Transcribed text, or an empty string on failure.
+        """
+        loop = asyncio.get_event_loop()
+        try:
+            audio_data = await loop.run_in_executor(
+                _executor,
+                self._listen_until_silence_sync,
+                silence_seconds,
+                sample_rate,
+                energy_threshold,
+                max_duration,
+            )
+        except Exception as exc:
+            log.warning("VAD recording failed: %s", exc)
+            return ""
+
+        if audio_data.size == 0:
+            return ""
+
+        try:
+            import os  # noqa: PLC0415
+            import soundfile as sf  # noqa: PLC0415
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            def _write_and_transcribe() -> str:
+                sf.write(tmp_path, audio_data, sample_rate)
+                return self._transcribe_sync(tmp_path)
+
+            result = await loop.run_in_executor(_executor, _write_and_transcribe)
+        except Exception as exc:
+            log.warning("Failed to save or transcribe VAD audio: %s", exc)
+            result = ""
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+        return result
+
     async def listen_once(
         self,
         duration: float = 5.0,
