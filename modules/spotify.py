@@ -217,7 +217,19 @@ class SpotifyPlayModule(NovaModule):
                 if not items:
                     return f"No track found for: {query}"
                 item = items[0]
-                sp.start_playback(device_id=device_id, uris=[item["uri"]])
+                # Play via album context + offset so Spotify's queue system works
+                # correctly. Playing with uris=[single_uri] puts Spotify in a
+                # no-context mode that breaks add_to_queue and skip.
+                album_uri = item.get("album", {}).get("uri")
+                if album_uri:
+                    sp.start_playback(
+                        device_id=device_id,
+                        context_uri=album_uri,
+                        offset={"uri": item["uri"]},
+                    )
+                else:
+                    # Fallback for tracks without an album (rare)
+                    sp.start_playback(device_id=device_id, uris=[item["uri"]])
                 return f"Now playing: {item['name']} by {item['artists'][0]['name']}"
 
             elif search_type == "artist":

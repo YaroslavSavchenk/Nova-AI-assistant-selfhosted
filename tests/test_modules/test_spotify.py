@@ -62,13 +62,15 @@ def _mock_sp():
     return sp
 
 
-def _fake_track_search(name="Bohemian Rhapsody", artist="Queen", uri="spotify:track:abc123"):
+def _fake_track_search(name="Bohemian Rhapsody", artist="Queen", uri="spotify:track:abc123",
+                       album_uri="spotify:album:album123"):
     return {
         "tracks": {
             "items": [{
                 "uri": uri,
                 "name": name,
                 "artists": [{"name": artist}],
+                "album": {"uri": album_uri, "name": "A Night at the Opera"},
             }]
         }
     }
@@ -163,9 +165,37 @@ async def test_play_track_success(play_module):
     with patch("modules.spotify._get_client", return_value=sp):
         result = await play_module.run(query="Bohemian Rhapsody", type="track")
 
-    sp.start_playback.assert_called_once()
+    sp.start_playback.assert_called_once_with(
+        device_id="test-device-id",
+        context_uri="spotify:album:album123",
+        offset={"uri": "spotify:track:abc123"},
+    )
     assert "Bohemian Rhapsody" in result
     assert "Queen" in result
+
+
+async def test_play_track_fallback_to_uri_when_no_album(play_module):
+    """Tracks without an album URI fall back to uris= playback."""
+    sp = _mock_sp()
+    sp.search.return_value = {
+        "tracks": {
+            "items": [{
+                "uri": "spotify:track:noalbum",
+                "name": "Orphan Track",
+                "artists": [{"name": "Artist"}],
+                "album": {},  # no uri key
+            }]
+        }
+    }
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await play_module.run(query="Orphan Track", type="track")
+
+    sp.start_playback.assert_called_once_with(
+        device_id="test-device-id",
+        uris=["spotify:track:noalbum"],
+    )
+    assert "Orphan Track" in result
 
 
 async def test_play_artist_success(play_module):
