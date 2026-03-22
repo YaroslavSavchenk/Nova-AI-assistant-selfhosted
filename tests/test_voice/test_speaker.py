@@ -1,149 +1,85 @@
 """
-tests/test_voice/test_speaker.py — Unit tests for voice/speaker.py.
-
-All external dependencies (TTS model, sounddevice, soundfile) are fully
-mocked so no real audio hardware or model download is required.
+Tests for voice/speaker.py (edge-tts backend)
 """
 
-import asyncio
-import os
-import sys
-import types
-from unittest.mock import AsyncMock, MagicMock, patch, call
-
 import pytest
-
-# ---------------------------------------------------------------------------
-# Stub the heavy optional imports before the speaker module is imported so
-# that tests can run in CI without installing TTS / sounddevice / soundfile.
-# ---------------------------------------------------------------------------
-
-def _make_stub_module(name: str) -> types.ModuleType:
-    mod = types.ModuleType(name)
-    sys.modules[name] = mod
-    return mod
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
-if "sounddevice" not in sys.modules:
-    sd_stub = _make_stub_module("sounddevice")
-    sd_stub.play = MagicMock()
-    sd_stub.wait = MagicMock()
+@pytest.fixture
+def speaker():
+    from voice.speaker import Speaker
+    return Speaker(language="en")
 
-if "soundfile" not in sys.modules:
-    sf_stub = _make_stub_module("soundfile")
-    sf_stub.read = MagicMock(return_value=(b"audio", 22050))
-
-if "TTS" not in sys.modules:
-    tts_pkg = _make_stub_module("TTS")
-    tts_api = _make_stub_module("TTS.api")
-    tts_api.TTS = MagicMock()
-
-from voice.speaker import Speaker  # noqa: E402  (must come after stubs)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_mock_model(speakers=("default_speaker",)):
-    """Return a MagicMock that looks like a loaded TTS model."""
-    model = MagicMock()
-    model.speakers = list(speakers)
-    model.tts_to_file = MagicMock()
-    return model
-
-
-def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 class TestSpeakToFileCallsTtsModel:
-    """speak_to_file() must call tts_to_file with the correct arguments."""
+    async def test_speak_to_file_calls_tts_model(self, speaker):
+        """speak_to_file calls edge_tts.Communicate.save with correct path."""
+        mock_communicate = AsyncMock()
+        mock_cls = MagicMock(return_value=mock_communicate)
 
-    def test_speak_to_file_calls_tts_model(self, tmp_path):
-        mock_model = _make_mock_model()
-        speaker = Speaker(speaker_wav="/ref/voice.wav", language="en")
-        speaker._model = mock_model  # inject pre-loaded model
+        with patch("voice.speaker.edge_tts") as mock_edge:
+            mock_edge.Communicate = mock_cls
+            await speaker.speak_to_file("Hello Nova", "/tmp/test.mp3")
 
-        output = str(tmp_path / "out.wav")
-        _run(speaker.speak_to_file("Hello Nova", output_path=output))
-
-        mock_model.tts_to_file.assert_called_once_with(
-            text="Hello Nova",
-            speaker_wav="/ref/voice.wav",
-            language="en",
-            file_path=output,
-        )
+        mock_cls.assert_called_once_with("Hello Nova", "en-US-AriaNeural")
+        mock_communicate.save.assert_awaited_once_with("/tmp/test.mp3")
 
 
 class TestSpeakPlaysAudio:
-    """speak() must synthesise audio and then call sd.play / sd.wait."""
+    async def test_speak_plays_audio(self, speaker):
+        """speak() synthesises audio and plays it via sounddevice."""
+        mock_communicate = AsyncMock()
+        mock_cls = MagicMock(return_value=mock_communicate)
 
-    def test_speak_plays_audio(self, tmp_path):
-        import sounddevice as sd
-        import soundfile as sf
+        with patch("voice.speaker.edge_tts") as mock_edge, \
+             patch("voice.speaker.sf") as mock_sf, \
+             patch("voice.speaker.sd") as mock_sd:
+            mock_edge.Communicate = mock_cls
+            mock_sf.read.return_value = (MagicMock(), 22050)
+            await speaker.speak("Hello")
 
-        mock_model = _make_mock_model()
-        sf.read = MagicMock(return_value=(b"pcm_data", 22050))
-        sd.play = MagicMock()
-        sd.wait = MagicMock()
-
-        speaker = Speaker(speaker_wav="/ref/voice.wav", language="en")
-        speaker._model = mock_model
-
-        _run(speaker.speak("Hello"))
-
-        mock_model.tts_to_file.assert_called_once()
-        sd.play.assert_called_once()
-        sd.wait.assert_called_once()
+        mock_sd.play.assert_called_once()
+        mock_sd.wait.assert_called_once()
 
 
 class TestSpeakExceptionDoesNotRaise:
-    """speak() must swallow exceptions and return None — never raise."""
+    async def test_speak_exception_does_not_raise(self, speaker):
+        """An exception from edge_tts is caught; speak() returns None silently."""
+        with patch("voice.speaker.edge_tts") as mock_edge:
+            mock_edge.Communicate.side_effect = RuntimeError("network error")
+            result = await speaker.speak("Hello")
 
-    def test_speak_exception_does_not_raise(self):
-        mock_model = _make_mock_model()
-        mock_model.tts_to_file.side_effect = RuntimeError("GPU OOM")
-
-        speaker = Speaker(language="en")
-        speaker._model = mock_model
-
-        # Must not raise anything
-        result = _run(speaker.speak("crash me"))
         assert result is None
 
 
 class TestLanguageOverrideInSpeak:
-    """The language parameter passed to speak() must reach tts_to_file."""
+    async def test_language_override_in_speak(self, speaker):
+        """Passing language='nl' uses the Dutch voice."""
+        mock_communicate = AsyncMock()
+        mock_cls = MagicMock(return_value=mock_communicate)
 
-    def test_language_override_in_speak(self, tmp_path):
-        mock_model = _make_mock_model()
-        speaker = Speaker(speaker_wav="/ref/voice.wav", language="en")
-        speaker._model = mock_model
+        with patch("voice.speaker.edge_tts") as mock_edge, \
+             patch("voice.speaker.sf") as mock_sf, \
+             patch("voice.speaker.sd"):
+            mock_edge.Communicate = mock_cls
+            mock_sf.read.return_value = (MagicMock(), 22050)
+            await speaker.speak("Hallo", language="nl")
 
-        output = str(tmp_path / "out_nl.wav")
-        _run(speaker.speak_to_file("Hallo", output_path=output, language="nl"))
-
-        _, kwargs = mock_model.tts_to_file.call_args
-        assert kwargs["language"] == "nl"
+        mock_cls.assert_called_once_with("Hallo", "nl-NL-ColetteNeural")
 
 
 class TestDefaultSpeakerUsedWhenNoSpeakerWav:
-    """When speaker_wav is None, the first item from model.speakers must be passed."""
+    async def test_unknown_language_falls_back_to_default_voice(self, speaker):
+        """An unknown language code falls back to the default English voice."""
+        mock_communicate = AsyncMock()
+        mock_cls = MagicMock(return_value=mock_communicate)
 
-    def test_default_speaker_used_when_no_speaker_wav(self, tmp_path):
-        mock_model = _make_mock_model(speakers=["builtin_speaker_0", "builtin_speaker_1"])
-        speaker = Speaker(speaker_wav=None, language="en")
-        speaker._model = mock_model
+        with patch("voice.speaker.edge_tts") as mock_edge, \
+             patch("voice.speaker.sf") as mock_sf, \
+             patch("voice.speaker.sd"):
+            mock_edge.Communicate = mock_cls
+            mock_sf.read.return_value = (MagicMock(), 22050)
+            await speaker.speak("Hello", language="xx")
 
-        output = str(tmp_path / "out_default.wav")
-        _run(speaker.speak_to_file("Test default speaker", output_path=output))
-
-        _, kwargs = mock_model.tts_to_file.call_args
-        # speaker= (not speaker_wav=) must be set to the first available speaker
-        assert kwargs.get("speaker") == "builtin_speaker_0"
-        assert "speaker_wav" not in kwargs
+        mock_cls.assert_called_once_with("Hello", "en-US-AriaNeural")

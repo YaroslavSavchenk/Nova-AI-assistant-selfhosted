@@ -122,9 +122,11 @@ class WakeWordDetector:
             return
 
         audio_queue: asyncio.Queue = asyncio.Queue()
+        _triggered = False  # cooldown flag — reset after callback completes
 
         def _stream_audio() -> None:
             """Background thread: stream mic chunks into the async queue."""
+            nonlocal _triggered
             try:
                 import sounddevice as sd  # noqa: PLC0415
                 import numpy as np  # noqa: PLC0415
@@ -143,12 +145,13 @@ class WakeWordDetector:
                         prediction = self._oww_model.predict(audio_chunk)
                         # Key may include version suffix (e.g. "alexa_v0.1")
                         score = max(prediction.values()) if prediction else 0.0
-                        if score > self.threshold:
+                        if score > self.threshold and not _triggered:
                             log.info(
                                 "Wake word '%s' detected (score=%.3f).",
                                 self.model_name,
                                 score,
                             )
+                            _triggered = True
                             # Signal the async side
                             loop.call_soon_threadsafe(
                                 audio_queue.put_nowait, "WAKE"
@@ -178,6 +181,8 @@ class WakeWordDetector:
                     await callback()
                 except Exception as exc:
                     log.warning("Wake word callback raised an exception: %s", exc)
+                finally:
+                    _triggered = False  # re-arm after interaction completes
 
         # Ensure the executor thread can finish
         await asyncio.gather(future, return_exceptions=True)
