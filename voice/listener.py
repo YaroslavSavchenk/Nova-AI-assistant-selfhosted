@@ -54,17 +54,11 @@ class Listener:
         try:
             from faster_whisper import WhisperModel  # noqa: PLC0415
 
-            log.info(
-                "Loading Faster-Whisper model '%s' on %s …",
-                self.model_size,
-                self.device,
-            )
             self._model = WhisperModel(
                 self.model_size,
                 device=self.device,
                 compute_type="int8",
             )
-            log.info("Faster-Whisper model loaded.")
         except Exception as exc:
             log.warning("Failed to load Faster-Whisper model: %s", exc)
             self._model = None
