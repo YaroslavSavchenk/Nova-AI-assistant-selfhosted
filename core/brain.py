@@ -224,6 +224,10 @@ class Brain:
             else:
                 # Final text response
                 final_text = response.content or ""
+                if not final_text.strip():
+                    # LLM returned empty content — use a safe fallback so the
+                    # user always gets a response rather than silent nothing.
+                    final_text = "Done."
                 await self._memory.add_message(session_id, "assistant", final_text)
                 return final_text
 

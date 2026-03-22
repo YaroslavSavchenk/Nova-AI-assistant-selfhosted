@@ -35,7 +35,7 @@ from modules.web_search import WebSearchModule
 from modules.system_monitor import SystemMonitorModule
 from modules.todo_reminders import TodoModule
 from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule
-from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule
+from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule
 from modules.spotify_lyrics_search import SpotifyLyricsSearchModule
 
 
@@ -281,6 +281,7 @@ async def main() -> None:
         tool_router.register(SpotifyMyPlaylistsModule())
         tool_router.register(SpotifyQueueModule())
         tool_router.register(SpotifyViewQueueModule())
+        tool_router.register(SpotifySkipToModule())
         tool_router.register(SpotifyLyricsSearchModule())
         logger.debug("Registered module: spotify (spotify_play, spotify_control, spotify_now_playing, spotify_my_playlists, spotify_queue, spotify_view_queue, spotify_lyrics_search)")
 

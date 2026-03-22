@@ -10,6 +10,7 @@ from unittest.mock import patch, MagicMock
 from modules.spotify import (
     SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule,
     SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule,
+    SpotifySkipToModule,
 )
 
 
@@ -46,6 +47,11 @@ def queue_module():
 @pytest.fixture
 def view_queue_module():
     return SpotifyViewQueueModule()
+
+
+@pytest.fixture
+def skip_to_module():
+    return SpotifySkipToModule()
 
 
 # ---------------------------------------------------------------------------
@@ -746,6 +752,30 @@ async def test_view_queue_shows_current_and_upcoming(view_queue_module):
     assert "Thunder" in result
 
 
+async def test_view_queue_deduplicates_current_track_copies(view_queue_module):
+    """Album autoplay copies of the currently playing song are filtered out."""
+    sp = _mock_sp()
+    sp.queue.return_value = {
+        "currently_playing": {"name": "Believer", "artists": [{"name": "Imagine Dragons"}]},
+        "queue": [
+            {"name": "Demons", "artists": [{"name": "Imagine Dragons"}]},
+            {"name": "Believer", "artists": [{"name": "Imagine Dragons"}]},  # autoplay copy
+            {"name": "Believer", "artists": [{"name": "Imagine Dragons"}]},  # autoplay copy
+            {"name": "Thunder", "artists": [{"name": "Imagine Dragons"}]},
+        ],
+    }
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await view_queue_module.run()
+
+    # Believers should be filtered (copies of currently playing)
+    lines = result.split("\n")
+    numbered = [l for l in lines if l.strip().startswith(("1.", "2.", "3."))]
+    assert any("Demons" in l for l in numbered)
+    assert any("Thunder" in l for l in numbered)
+    assert not any("Believer" in l for l in numbered)
+
+
 async def test_view_queue_empty_queue(view_queue_module):
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue(next_tracks=[])
@@ -795,5 +825,95 @@ async def test_view_queue_exception_returns_error_string(view_queue_module):
 
     with patch("modules.spotify._get_client", return_value=sp):
         result = await view_queue_module.run()
+
+    assert "failed" in result.lower() or "error" in result.lower()
+
+# ---------------------------------------------------------------------------
+# SpotifySkipToModule tests
+# ---------------------------------------------------------------------------
+
+
+def _fake_queue_with_tracks(*names):
+    """Build a queue dict with the given track names (all by 'Artist')."""
+    return {
+        "currently_playing": {"name": "Current Song", "artists": [{"name": "Artist"}]},
+        "queue": [{"name": n, "artists": [{"name": "Artist"}]} for n in names],
+    }
+
+
+async def test_skip_to_first_track(skip_to_module):
+    """Target is position 1 — one next_track call."""
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue_with_tracks("Demons", "Thunder", "Manic")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await skip_to_module.run(track_name="Demons")
+
+    sp.next_track.assert_called_once()
+    assert "Demons" in result
+
+
+async def test_skip_to_third_track(skip_to_module):
+    """Target is position 3 — three next_track calls."""
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue_with_tracks("Demons", "Thunder", "Manic")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await skip_to_module.run(track_name="Manic")
+
+    assert sp.next_track.call_count == 3
+    assert "Manic" in result
+    assert "3" in result
+
+
+async def test_skip_to_partial_name_match(skip_to_module):
+    """'him and' matches 'Him & I (with Halsey)' via substring."""
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue_with_tracks("Demons", "Him & I (with Halsey)", "Thunder")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await skip_to_module.run(track_name="him and i")
+
+    assert sp.next_track.call_count == 2
+    assert "Him & I" in result
+
+
+async def test_skip_to_not_in_queue(skip_to_module):
+    """Returns helpful message listing what IS in queue."""
+    sp = _mock_sp()
+    sp.queue.return_value = _fake_queue_with_tracks("Demons", "Thunder")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await skip_to_module.run(track_name="Stairway to Heaven")
+
+    sp.next_track.assert_not_called()
+    assert "not found" in result.lower()
+    assert "Demons" in result
+
+
+async def test_skip_to_empty_queue(skip_to_module):
+    sp = _mock_sp()
+    sp.queue.return_value = {"currently_playing": None, "queue": []}
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await skip_to_module.run(track_name="Demons")
+
+    sp.next_track.assert_not_called()
+    assert "empty" in result.lower()
+
+
+async def test_skip_to_not_configured(skip_to_module):
+    with patch("modules.spotify._get_client", return_value=None):
+        result = await skip_to_module.run(track_name="Demons")
+
+    assert "not configured" in result.lower()
+
+
+async def test_skip_to_exception_returns_error_string(skip_to_module):
+    sp = _mock_sp()
+    sp.queue.side_effect = RuntimeError("connection lost")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await skip_to_module.run(track_name="Demons")
 
     assert "failed" in result.lower() or "error" in result.lower()

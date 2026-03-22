@@ -657,19 +657,44 @@ class SpotifyViewQueueModule(NovaModule):
                 lines.append(f"Now playing: {name} by {artist}")
 
             queue = data.get("queue", [])
-            if not queue:
+
+            # Deduplicate: collapse consecutive or repeated same-name+artist entries
+            # (album autoplay often queues many versions of the same track).
+            # Also filter out copies of the currently playing track.
+            current_key = None
+            if current:
+                current_key = (
+                    current.get("name", "").lower(),
+                    current.get("artists", [{}])[0].get("name", "").lower(),
+                )
+            seen: dict[tuple, int] = {}
+            deduped = []
+            for track in queue:
+                name = track.get("name", "Unknown")
+                artist = track.get("artists", [{}])[0].get("name", "Unknown")
+                key = (name.lower(), artist.lower())
+                if key == current_key:
+                    continue  # album autoplay copy of currently playing song
+                if key in seen:
+                    seen[key] += 1
+                else:
+                    seen[key] = 1
+                    deduped.append(track)
+
+            if not deduped:
                 lines.append("Queue is empty — nothing coming up next.")
             else:
-                # Spotify returns explicitly queued tracks first, then album/context
-                # autofill tracks. Show only the first 5 to avoid noise.
-                display = queue[:5]
-                lines.append(f"\nUp next:")
-                for i, track in enumerate(display, 1):
+                lines.append("\nUp next:")
+                for i, track in enumerate(deduped[:5], 1):
                     name = track.get("name", "Unknown")
                     artist = track.get("artists", [{}])[0].get("name", "Unknown")
-                    lines.append(f"  {i}. {name} by {artist}")
-                if len(queue) > 5:
-                    lines.append(f"  (+ {len(queue) - 5} more from album/autoplay)")
+                    key = (name.lower(), artist.lower())
+                    count = seen.get(key, 1)
+                    suffix = f" (×{count})" if count > 1 else ""
+                    lines.append(f"  {i}. {name} by {artist}{suffix}")
+                hidden = len(deduped) - 5
+                if hidden > 0:
+                    lines.append(f"  (+ {hidden} more from album/autoplay)")
 
             return "\n".join(lines)
 
@@ -679,3 +704,95 @@ class SpotifyViewQueueModule(NovaModule):
         except Exception as exc:
             logger.exception("SpotifyViewQueueModule error")
             return f"Failed to get queue: {exc}"
+
+
+class SpotifySkipToModule(NovaModule):
+    """Skip directly to a specific track in the queue by name."""
+
+    name: str = "spotify_skip_to"
+    description: str = (
+        "Skip directly to a specific song already in the queue by name. "
+        "Use this instead of spotify_control when the user says 'skip to X', "
+        "'go straight to X', 'jump to X', or 'play X from the queue'. "
+        "Reads the current queue, finds the song's position, and skips exactly "
+        "the right number of times — no guessing required."
+    )
+    parameters: dict = {
+        "type": "object",
+        "properties": {
+            "track_name": {
+                "type": "string",
+                "description": "Name of the track to skip to — e.g. 'Manic' or 'Him and I'.",
+            },
+        },
+        "required": ["track_name"],
+    }
+
+    async def run(self, **kwargs) -> str:
+        try:
+            target: str = kwargs.get("track_name", "").strip().lower()
+            if not target:
+                return "Error: track name cannot be empty."
+
+            sp = _get_client()
+            if sp is None:
+                return "Spotify is not configured. Run `python3 scripts/spotify_auth.py` first."
+
+            device_id = _get_device_id(sp)
+            if device_id is None:
+                return "No Spotify device found. Open Spotify on your PC first."
+
+            queue_data = sp.queue()
+            if not queue_data:
+                return "No active playback."
+
+            queue = queue_data.get("queue", [])
+            if not queue:
+                return "Queue is empty — nothing to skip to."
+
+            def _normalize(s: str) -> str:
+                """Lowercase and replace & with 'and' for fuzzy matching."""
+                return s.lower().replace("&", "and").replace("  ", " ").strip()
+
+            target_norm = _normalize(target)
+
+            # Find the target track (name contains query or query contains name)
+            position = None
+            found_name = None
+            found_artist = None
+            for i, track in enumerate(queue):
+                name = _normalize(track.get("name", ""))
+                if target_norm in name or name in target_norm:
+                    position = i + 1  # number of next_track calls needed
+                    found_name = track.get("name")
+                    found_artist = track.get("artists", [{}])[0].get("name", "")
+                    break
+
+            if position is None:
+                available = [
+                    f"{t.get('name')} by {t.get('artists', [{}])[0].get('name', '')}"
+                    for t in queue[:5]
+                ]
+                return (
+                    f"'{kwargs.get('track_name')}' not found in queue. "
+                    f"Up next: {', '.join(available)}"
+                )
+
+            for _ in range(position):
+                sp.next_track(device_id=device_id)
+                if position > 1:
+                    await asyncio.sleep(0.4)
+
+            label = f"Skipped {position} track{'s' if position > 1 else ''}."
+            return f"{label} Now playing: {found_name} by {found_artist}"
+
+        except spotipy.exceptions.SpotifyException as exc:
+            if exc.http_status == 403:
+                return "Spotify Premium required for skip."
+            if exc.http_status == 404:
+                return "No active Spotify device found."
+            logger.exception("SpotifySkipToModule error")
+            return f"Spotify error: {exc}"
+        except Exception as exc:
+            logger.exception("SpotifySkipToModule error")
+            return f"Skip-to failed: {exc}"
