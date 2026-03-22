@@ -22,11 +22,7 @@ voice:
     language: en
     device: cpu
   wake_word:
-    enabled: true
-    model: hey_nova                  # Display name / OpenWakeWord fallback model name
-    access_key: ""                   # Picovoice AccessKey (from console.picovoice.ai)
-    model_path: voice/hey_nova.ppn   # Path to downloaded .ppn keyword file
-    threshold: 0.5                   # Confidence threshold (OpenWakeWord fallback only)
+    enabled: true                    # Say "Hey Nova" or just "Nova" to trigger
 
 modules:
   web_search: true

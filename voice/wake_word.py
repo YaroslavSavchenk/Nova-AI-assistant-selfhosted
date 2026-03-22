@@ -1,19 +1,14 @@
 """
-voice/wake_word.py — Wake word detection.
+voice/wake_word.py — Wake word detection using Faster-Whisper.
 
-Supports two backends, selected via config:
-  - porcupine  (default) — Picovoice Porcupine, supports custom "Hey Nova" keyword
-  - openwakeword          — fallback, built-in keywords only (alexa, hey_jarvis, …)
-
-Porcupine setup (one-time):
-  1. Create a free account at console.picovoice.ai
-  2. Wake Word → New → type "Hey Nova" → train → download Linux .ppn file
-  3. Place the .ppn file anywhere and set voice.wake_word.model_path in config.yaml
-  4. Set voice.wake_word.access_key to your Picovoice AccessKey
+Listens to short overlapping audio chunks and transcribes them with the
+Whisper "tiny" model. If the transcript contains the wake phrase, the
+callback fires. Fully offline — no accounts, no API keys, no external pings.
 """
 
 import asyncio
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 log = logging.getLogger(__name__)
@@ -21,98 +16,97 @@ log = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="wake_word")
 
 _SAMPLE_RATE = 16000
-_CHUNK_SIZE = 512  # Porcupine requires 512 samples per frame at 16 kHz
+_CHUNK_SECONDS = 2.0          # Record 2-second windows
+_CHUNK_SIZE = int(_SAMPLE_RATE * _CHUNK_SECONDS)
 
 
 class WakeWordDetector:
     """
-    Listens continuously for a wake word and fires an async callback on detection.
+    Continuously records short audio windows and uses Faster-Whisper (tiny)
+    to detect the wake phrase "hey nova" or just "nova".
 
-    Tries Porcupine first (if access_key + model_path are set), then falls back
-    to OpenWakeWord for built-in keywords.
+    Fully local — uses the same Whisper runtime already installed for STT.
     """
 
     def __init__(
         self,
         model_name: str = "hey_nova",
         threshold: float = 0.5,
-        access_key: str = "",
-        model_path: str = "",
+        access_key: str = "",       # unused, kept for config compatibility
+        model_path: str = "",       # unused, kept for config compatibility
+        wake_phrases: list[str] | None = None,
     ):
         """
         Args:
-            model_name:  Wake word name (used for OpenWakeWord fallback).
-            threshold:   Detection confidence threshold (OpenWakeWord only).
-            access_key:  Picovoice AccessKey (required for Porcupine).
-            model_path:  Path to the .ppn keyword file (required for Porcupine).
+            model_name:   Ignored — kept for config compatibility.
+            wake_phrases: List of phrases that trigger detection.
+                          Defaults to ["hey nova", "nova"].
         """
-        self.model_name = model_name
-        self.threshold = threshold
-        self.access_key = access_key
-        self.model_path = model_path
-        self._backend: str = ""  # "porcupine" or "openwakeword" — set on load
-        self._porcupine = None
-        self._oww_model = None
+        self.wake_phrases = wake_phrases or ["hey nova", "hey, nova", "nova"]
+        self._whisper = None  # lazy-loaded
 
     # ------------------------------------------------------------------
-    # Model loading
+    # Internal helpers
     # ------------------------------------------------------------------
 
-    def _load_porcupine(self) -> bool:
-        """Try to load the Porcupine backend."""
-        if not self.access_key or not self.model_path:
-            return False
+    def _load_whisper(self) -> bool:
+        """Lazy-load Faster-Whisper tiny model."""
+        if self._whisper is not None:
+            return True
         try:
-            import pvporcupine  # noqa: PLC0415
-            from pathlib import Path  # noqa: PLC0415
+            from faster_whisper import WhisperModel  # noqa: PLC0415
+            log.info("Loading Whisper tiny model for wake word detection …")
+            self._whisper = WhisperModel("tiny", device="cpu", compute_type="int8")
+            log.info("Wake word detector ready — say 'Hey Nova'.")
+            return True
+        except Exception as exc:
+            log.warning("Failed to load Whisper for wake word detection: %s", exc)
+            return False
 
-            ppn_path = str(Path(self.model_path).expanduser().resolve())
-            log.info("Loading Porcupine wake word model from '%s' …", ppn_path)
-            self._porcupine = pvporcupine.create(
-                access_key=self.access_key,
-                keyword_paths=[ppn_path],
+    def _contains_wake_phrase(self, text: str) -> bool:
+        """Check if transcription contains any wake phrase."""
+        text = text.lower().strip()
+        return any(phrase in text for phrase in self.wake_phrases)
+
+    def _record_and_check(self) -> bool:
+        """
+        Record one audio chunk, transcribe it, return True if wake phrase detected.
+        Blocking — runs in executor thread.
+        """
+        import numpy as np  # noqa: PLC0415
+        import sounddevice as sd  # noqa: PLC0415
+        import tempfile, os  # noqa: PLC0415, E401
+        import soundfile as sf  # noqa: PLC0415
+
+        audio = sd.rec(_CHUNK_SIZE, samplerate=_SAMPLE_RATE, channels=1, dtype="float32")
+        sd.wait()
+        audio = np.squeeze(audio)
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+            sf.write(tmp_path, audio, _SAMPLE_RATE)
+
+            segments, _ = self._whisper.transcribe(
+                tmp_path,
+                language=None,   # auto-detect — handles EN/NL/RU
+                beam_size=1,     # fastest setting for wake word use
+                vad_filter=True, # skip silent chunks quickly
             )
-            self._backend = "porcupine"
-            log.info("Porcupine wake word loaded (frame_length=%d).", self._porcupine.frame_length)
-            return True
-        except ImportError:
-            log.warning("pvporcupine not installed — trying OpenWakeWord fallback.")
-            return False
+            text = " ".join(seg.text.strip() for seg in segments)
+            if text:
+                log.debug("Wake word check: '%s'", text)
+            return self._contains_wake_phrase(text)
         except Exception as exc:
-            log.warning("Failed to load Porcupine model: %s", exc)
+            log.debug("Wake word transcription error: %s", exc)
             return False
-
-    def _load_openwakeword(self) -> bool:
-        """Try to load the OpenWakeWord backend."""
-        try:
-            import openwakeword  # noqa: PLC0415
-            from openwakeword.model import Model  # noqa: PLC0415
-
-            all_paths = openwakeword.get_pretrained_model_paths()
-            matched = [p for p in all_paths if self.model_name.lower() in p.lower()]
-            if not matched:
-                log.warning(
-                    "No OpenWakeWord model found for '%s'. Available: %s. "
-                    "Configure Porcupine for custom wake words.",
-                    self.model_name,
-                    [p.split("/")[-1] for p in all_paths],
-                )
-                return False
-
-            log.info("Loading OpenWakeWord model '%s' …", self.model_name)
-            self._oww_model = Model(wakeword_model_paths=[matched[0]])
-            self._backend = "openwakeword"
-            log.info("OpenWakeWord model '%s' loaded.", self.model_name)
-            return True
-        except ImportError:
-            log.warning("openwakeword not installed — wake word detection disabled.")
-            return False
-        except Exception as exc:
-            log.warning("Failed to load OpenWakeWord model: %s", exc)
-            return False
-
-    def _load_model(self) -> bool:
-        return self._load_porcupine() or self._load_openwakeword()
+        finally:
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
     # ------------------------------------------------------------------
     # Public async API
@@ -123,76 +117,27 @@ class WakeWordDetector:
         callback: callable,
         stop_event: asyncio.Event,
     ) -> None:
-        """Stream mic audio and call callback() whenever the wake word fires."""
+        """
+        Loop: record → transcribe → if wake phrase detected → call callback.
+        Repeats until stop_event is set.
+        """
         loop = asyncio.get_event_loop()
 
-        if not self._load_model():
-            log.info("Wake word detection inactive; falling back to push-to-talk.")
+        if not self._load_whisper():
+            log.warning("Wake word detection disabled — falling back to push-to-talk.")
             await stop_event.wait()
             return
 
-        audio_queue: asyncio.Queue = asyncio.Queue()
-        _triggered = False
-
-        if self._backend == "porcupine":
-            chunk_size = self._porcupine.frame_length
-        else:
-            chunk_size = 1280  # OpenWakeWord expects 1280 samples
-
-        def _stream_audio() -> None:
-            nonlocal _triggered
-            try:
-                import sounddevice as sd  # noqa: PLC0415
-                import numpy as np  # noqa: PLC0415
-
-                with sd.InputStream(
-                    samplerate=_SAMPLE_RATE,
-                    channels=1,
-                    dtype="int16",
-                    blocksize=chunk_size,
-                ) as stream:
-                    log.debug("Wake word stream started (%s backend).", self._backend)
-                    while not stop_event.is_set():
-                        chunk, _ = stream.read(chunk_size)
-                        audio_chunk = np.squeeze(chunk)
-
-                        detected = False
-                        if self._backend == "porcupine":
-                            result = self._porcupine.process(audio_chunk.tolist())
-                            detected = result >= 0
-                        else:
-                            pred = self._oww_model.predict(audio_chunk)
-                            score = max(pred.values()) if pred else 0.0
-                            detected = score > self.threshold
-
-                        if detected and not _triggered:
-                            log.info("Wake word detected (%s).", self._backend)
-                            _triggered = True
-                            loop.call_soon_threadsafe(audio_queue.put_nowait, "WAKE")
-
-            except Exception as exc:
-                log.warning("Wake word stream error: %s", exc)
-            finally:
-                if self._backend == "porcupine" and self._porcupine:
-                    self._porcupine.delete()
-                loop.call_soon_threadsafe(audio_queue.put_nowait, None)
-
-        future = loop.run_in_executor(_executor, _stream_audio)
-
         while not stop_event.is_set():
             try:
-                event = await asyncio.wait_for(audio_queue.get(), timeout=0.5)
-            except asyncio.TimeoutError:
+                detected = await loop.run_in_executor(_executor, self._record_and_check)
+            except Exception as exc:
+                log.warning("Wake word loop error: %s", exc)
                 continue
 
-            if event is None:
-                break
-            if event == "WAKE":
+            if detected:
+                log.info("Wake word detected — activating Nova.")
                 try:
                     await callback()
                 except Exception as exc:
                     log.warning("Wake word callback error: %s", exc)
-                finally:
-                    _triggered = False
-
-        await asyncio.gather(future, return_exceptions=True)
