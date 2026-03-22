@@ -129,10 +129,11 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=handlers,
     )
-    # Suppress noisy HTTP request logs from httpx/ollama unless in debug mode
+    # Suppress noisy HTTP request logs from httpx/ollama/ddgs unless in debug mode
     if not debug:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
+        logging.getLogger("primp").setLevel(logging.WARNING)
 
 
 async def main() -> None:
