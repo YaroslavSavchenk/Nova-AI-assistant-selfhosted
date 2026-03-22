@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 2 complete — smart home next
+## Current status: Phase 2 complete — starting Phase 3 (News & Research)
 
 ---
 
@@ -51,7 +51,7 @@ Three tools that make Nova immediately useful without any external accounts.
 
 **Done when:** Nova can answer "search for X", "what's my CPU usage", and "remind me to Y" through natural conversation.
 
-Tests: `tests/test_modules/test_web_search.py`, `test_system_monitor.py`, `test_todo_reminders.py`
+Tests: `tests/test_modules/test_web_search.py`, `tests/test_modules/test_system_monitor.py`, `tests/test_modules/test_todo.py`
 
 ---
 
@@ -80,27 +80,7 @@ Add the voice interface. This is where Nova goes from chatbot to assistant.
 
 ---
 
-## Phase 3 — Smart Home `[NEXT]`
-
-Control Home Assistant devices through Nova.
-
-**Module:** `modules/smart_home.py`
-
-**Integration:** Home Assistant REST API (long-lived access token, local network)
-
-**Capabilities:**
-- Turn lights/switches on/off
-- Query device states ("is the front door locked?")
-- Run scenes and automations
-- Get sensor readings (temperature, motion, etc.)
-
-**Config needed in `.env`:** `HA_URL`, `HA_TOKEN`
-
-**Done when:** "Turn off the living room lights" works.
-
----
-
-## Phase 4 — News & Research `[PLANNED]`
+## Phase 3 — News & Research `[NEXT]`
 
 Give Nova better research capabilities beyond a single web search.
 
@@ -114,9 +94,13 @@ Give Nova better research capabilities beyond a single web search.
 
 **Thinking toggle note:** Enable `/think` for research tasks — the LLM should reason about which sources to trust and how to synthesize results before responding.
 
+**Tests:** `tests/test_modules/test_research.py`
+
+**Done when:** Nova can fetch today's news by topic, look up a Wikipedia article, and summarize a URL — all through natural conversation.
+
 ---
 
-## Phase 5 — Spotify `[PLANNED]`
+## Phase 4 — Spotify `[PLANNED]`
 
 Music control through natural language.
 
@@ -136,7 +120,7 @@ Music control through natural language.
 
 ---
 
-## Phase 6 — Calendar & Email `[PLANNED]`
+## Phase 5 — Calendar & Email `[PLANNED]`
 
 Google Workspace integration. Highest privacy sensitivity — requires OAuth consent.
 
@@ -154,7 +138,7 @@ Google Workspace integration. Highest privacy sensitivity — requires OAuth con
 
 ---
 
-## Phase 7 — Memory Upgrade `[PLANNED]`
+## Phase 6 — Memory Upgrade `[PLANNED]`
 
 Upgrade the SQLite conversation log to a full semantic memory system.
 
@@ -175,7 +159,7 @@ Upgrade the SQLite conversation log to a full semantic memory system.
 
 ---
 
-## Phase 8 — Provider Abstraction `[PLANNED]`
+## Phase 7 — Provider Abstraction `[PLANNED]`
 
 Enable swapping the LLM brain from Ollama to Claude or OpenAI.
 
@@ -194,13 +178,61 @@ Enable swapping the LLM brain from Ollama to Claude or OpenAI.
 
 ---
 
+## Phase 8 — PC Control `[PLANNED]`
+
+Let Nova interact with the local machine — run commands, control apps, and act as an agent that can operate your dev environment.
+
+**Module:** `modules/pc_control.py`
+
+**Capabilities:**
+- Run shell commands from an explicit allowlist (safe, no arbitrary execution)
+- Send prompts to Claude Code via CLI (`claude -p "..."`) and return the response
+- Open applications or files
+- Read/write local files on request
+- Query running processes
+
+**Safety rules:**
+- Commands must be on a pre-approved allowlist in `config.yaml`
+- Destructive commands (rm, kill, etc.) require explicit confirmation before running
+- Never execute arbitrary strings from the LLM without allowlist validation
+
+**Config:** `pc_control.allowed_commands` list in `config.yaml`
+
+**Done when:** "Ask Claude Code to explain this function" and "open VS Code" work through Nova.
+
+---
+
+## Phase 9 — Persona `[PLANNED]`
+
+Give Nova a fully customizable personality layer — name, voice, tone, language defaults, and behavioral traits.
+
+**Capabilities:**
+- Custom name (not hardcoded "Nova") configurable in `config.yaml`
+- Personality tone presets: professional, casual, witty, concise
+- Language preference — default response language, or auto-detect from user input
+- Wake word tied to persona name
+- Per-context tone switching (e.g. casual for chat, professional for email drafts)
+
+**Files:**
+- `core/prompts/system.md` — already exists, will be templated from config
+- `core/persona.py` — new, loads persona config and injects into system prompt at startup
+
+**Config:** `persona.name`, `persona.tone`, `persona.language` in `config.yaml`
+
+**Done when:** You can change Nova's name and tone in config and it behaves consistently across all interactions.
+
+---
+
 ## Backlog / Ideas
 
 These are not scheduled but worth keeping track of:
 
+- **Smart Home** — Home Assistant REST API integration (lights, switches, scenes, sensors). Config: `HA_URL`, `HA_TOKEN`. Module: `modules/smart_home.py`. Skipped Phase 3 — no HA setup yet.
 - **File assistant** — read, summarize, and answer questions about local files (PDFs, text, code)
-- **Shell executor** — run pre-approved shell commands (with an allowlist, never arbitrary code)
 - **Proactive notifications** — Nova initiates contact on scheduled triggers (morning briefing, reminders)
+- **REST API / Backend server** — expose Nova core as a FastAPI server so external clients can connect. Required foundation for the phone app and hardware device goals below.
+- **Phone app** — mobile client (iOS/Android) that connects to the Nova backend over the network. User talks to Nova and gets responses through the app.
+- **Standalone home device** — always-on hardware box (like an Echo) running Nova locally, connected to the same backend.
 - **Web UI** — simple browser interface as an alternative to terminal (FastAPI + HTMX or similar)
 - **Multi-modal input** — accept images (describe what's in a photo, read text from a screenshot)
 - **Custom wake phrase training** — train a personalized "Hey Nova" model on your own voice
@@ -211,7 +243,6 @@ These are not scheduled but worth keeping track of:
 ## Non-goals (explicit out of scope)
 
 - Cloud hosting / multi-user support — Nova is a personal, local-first assistant
-- Mobile app — terminal and voice are the only interfaces for now
 - General-purpose agent framework — this is not LangChain; the architecture stays simple and Nova-specific
 
 ---

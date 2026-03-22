@@ -34,6 +34,7 @@ from modules.base import NovaModule
 from modules.web_search import WebSearchModule
 from modules.system_monitor import SystemMonitorModule
 from modules.todo_reminders import TodoModule
+from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +265,12 @@ async def main() -> None:
         await todo_module.init()
         tool_router.register(todo_module)
         logger.debug("Registered module: todo")
+
+    if modules_cfg.get("research", False):
+        tool_router.register(NewsModule())
+        tool_router.register(WikipediaModule())
+        tool_router.register(SummarizeUrlModule())
+        logger.debug("Registered module: research (news_headlines, wikipedia_lookup, summarize_url)")
 
     brain = Brain(
         config=config,
