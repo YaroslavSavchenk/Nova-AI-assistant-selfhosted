@@ -211,12 +211,25 @@ class SpotifyPlayModule(NovaModule):
                 return "No Spotify device found. Open Spotify on your PC first."
 
             if search_type == "track":
-                results = sp.search(q=query, type="track", limit=1)
+                search_query = _parse_track_query(query)
+                results = sp.search(q=search_query, type="track", limit=1)
                 items = results.get("tracks", {}).get("items", [])
                 if not items:
                     return f"No track found for: {query}"
                 item = items[0]
                 sp.start_playback(device_id=device_id, uris=[item["uri"]])
+
+                # Fill the queue with more tracks by the same artist so skipping works.
+                try:
+                    artist_name = item["artists"][0]["name"]
+                    more = sp.search(q=f"artist:{artist_name}", type="track", limit=6)
+                    more_tracks = more.get("tracks", {}).get("items", [])
+                    for t in more_tracks:
+                        if t["uri"] != item["uri"]:
+                            sp.add_to_queue(t["uri"], device_id=device_id)
+                except Exception:
+                    pass  # Queue fill is best-effort; never affect main playback response
+
                 return f"Now playing: {item['name']} by {item['artists'][0]['name']}"
 
             elif search_type == "artist":

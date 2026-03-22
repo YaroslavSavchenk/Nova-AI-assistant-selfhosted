@@ -31,7 +31,8 @@ class SpotifyLyricsSearchModule(NovaModule):
         "says a line from a song but doesn't know the title or artist — e.g. "
         "'that song that goes is this the real life' or 'play the one with we will rock you'. "
         "Returns the top matching song(s) for the user to confirm. "
-        "After confirmation, call spotify_play to play the track."
+        "After the user confirms, call spotify_play with the full 'Title by Artist' string "
+        "as the query and type set to 'track' — e.g. query='Bohemian Rhapsody by Queen', type='track'."
     )
     parameters: dict = {
         "type": "object",

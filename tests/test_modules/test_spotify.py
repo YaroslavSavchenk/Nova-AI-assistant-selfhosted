@@ -68,6 +68,16 @@ def _fake_track_search(name="Bohemian Rhapsody", artist="Queen", uri="spotify:tr
     }
 
 
+def _fake_artist_track_fill(artist="Queen", playing_uri="spotify:track:abc123"):
+    """Return a fake search result with 6 tracks (including the currently playing one)."""
+    tracks = [
+        {"uri": playing_uri, "name": "Playing Track", "artists": [{"name": artist}]},
+    ]
+    for i in range(1, 6):
+        tracks.append({"uri": f"spotify:track:fill{i}", "name": f"Fill Track {i}", "artists": [{"name": artist}]})
+    return {"tracks": {"items": tracks}}
+
+
 def _fake_artist_search(name="Arctic Monkeys", artist_id="artist123"):
     return {
         "artists": {
@@ -151,7 +161,11 @@ def _fake_now_playing(track="Bohemian Rhapsody", artist="Queen", album="A Night 
 
 async def test_play_track_success(play_module):
     sp = _mock_sp()
-    sp.search.return_value = _fake_track_search()
+    # First call: track search. Second call: artist fill search.
+    sp.search.side_effect = [
+        _fake_track_search(),
+        _fake_artist_track_fill(),
+    ]
 
     with patch("modules.spotify._get_client", return_value=sp):
         result = await play_module.run(query="Bohemian Rhapsody", type="track")
@@ -159,6 +173,42 @@ async def test_play_track_success(play_module):
     sp.start_playback.assert_called_once()
     assert "Bohemian Rhapsody" in result
     assert "Queen" in result
+
+
+async def test_play_track_queues_artist_fill(play_module):
+    """After playing a single track, up to 5 other tracks by the same artist are queued."""
+    sp = _mock_sp()
+    playing_uri = "spotify:track:abc123"
+    sp.search.side_effect = [
+        _fake_track_search(uri=playing_uri),
+        _fake_artist_track_fill(artist="Queen", playing_uri=playing_uri),
+    ]
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await play_module.run(query="Bohemian Rhapsody", type="track")
+
+    # Exactly 5 fill tracks should be queued (the 6th result is the playing track, excluded)
+    assert sp.add_to_queue.call_count == 5
+    queued_uris = [call.args[0] for call in sp.add_to_queue.call_args_list]
+    assert playing_uri not in queued_uris
+    assert "Bohemian Rhapsody" in result
+
+
+async def test_play_track_queue_fill_failure_silent(play_module):
+    """If add_to_queue raises (e.g. non-Premium), the error is silently ignored."""
+    sp = _mock_sp()
+    sp.search.side_effect = [
+        _fake_track_search(),
+        _fake_artist_track_fill(),
+    ]
+    sp.add_to_queue.side_effect = RuntimeError("Premium required")
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await play_module.run(query="Bohemian Rhapsody", type="track")
+
+    # Main response is unaffected
+    assert "Bohemian Rhapsody" in result
+    assert "error" not in result.lower()
 
 
 async def test_play_artist_success(play_module):
@@ -209,13 +259,16 @@ async def test_play_playlist_success(play_module):
 
 async def test_play_defaults_to_track_type(play_module):
     sp = _mock_sp()
-    sp.search.return_value = _fake_track_search()
+    sp.search.side_effect = [
+        _fake_track_search(),
+        _fake_artist_track_fill(),
+    ]
 
     with patch("modules.spotify._get_client", return_value=sp):
         await play_module.run(query="some song")
 
-    call_kwargs = sp.search.call_args
-    assert call_kwargs.kwargs.get("type") == "track" or "track" in str(call_kwargs)
+    first_call = sp.search.call_args_list[0]
+    assert first_call.kwargs.get("type") == "track" or "track" in str(first_call)
 
 
 async def test_play_no_results(play_module):
@@ -616,3 +669,63 @@ async def test_queue_parses_by_format(queue_module):
     assert "artist:Imagine Dragons" in q_used
     assert "Believer" in result
     assert "Imagine Dragons" in result
+
+
+# ---------------------------------------------------------------------------
+# SpotifyPlayModule — _parse_track_query integration tests
+# ---------------------------------------------------------------------------
+
+
+async def test_play_track_parses_by_format(play_module):
+    """'Title by Artist' queries are reformatted to track:Title artist:Artist before searching."""
+    sp = _mock_sp()
+    sp.search.side_effect = [
+        _fake_track_search(name="I'm Happy", artist="The Goo Goo Dolls", uri="spotify:track:imhappy"),
+        _fake_artist_track_fill(artist="The Goo Goo Dolls", playing_uri="spotify:track:imhappy"),
+    ]
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await play_module.run(query="I'm Happy by The Goo Goo Dolls", type="track")
+
+    # call_args_list[0] is the first (track) search; subsequent calls are the best-effort queue fill
+    first_call = sp.search.call_args_list[0]
+    q_used = first_call.kwargs.get("q") or first_call.args[0]
+    assert "track:I'm Happy" in q_used
+    assert "artist:The Goo Goo Dolls" in q_used
+    assert "I'm Happy" in result
+    assert "The Goo Goo Dolls" in result
+
+
+async def test_play_track_parses_dash_format(play_module):
+    """'Title - Artist' queries are also reformatted to field filter syntax."""
+    sp = _mock_sp()
+    sp.search.side_effect = [
+        _fake_track_search(name="Stairway to Heaven", artist="Led Zeppelin", uri="spotify:track:stairway"),
+        _fake_artist_track_fill(artist="Led Zeppelin", playing_uri="spotify:track:stairway"),
+    ]
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        result = await play_module.run(query="Stairway to Heaven - Led Zeppelin", type="track")
+
+    first_call = sp.search.call_args_list[0]
+    q_used = first_call.kwargs.get("q") or first_call.args[0]
+    assert "track:Stairway to Heaven" in q_used
+    assert "artist:Led Zeppelin" in q_used
+    assert "Stairway to Heaven" in result
+
+
+async def test_play_track_plain_query_unchanged(play_module):
+    """A plain track name (no 'by' or '-') is passed to search without modification."""
+    sp = _mock_sp()
+    sp.search.side_effect = [
+        _fake_track_search(name="Bohemian Rhapsody", artist="Queen"),
+        _fake_artist_track_fill(artist="Queen"),
+    ]
+
+    with patch("modules.spotify._get_client", return_value=sp):
+        await play_module.run(query="Bohemian Rhapsody", type="track")
+
+    # First search call should receive the plain query with no field filter prefix
+    first_call = sp.search.call_args_list[0]
+    q_used = first_call.kwargs.get("q") or first_call.args[0]
+    assert q_used == "Bohemian Rhapsody"
