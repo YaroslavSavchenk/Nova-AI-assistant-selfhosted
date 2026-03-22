@@ -4,13 +4,11 @@
 
 ---
 
-## Current status: Pre-implementation (architecture defined, no code yet)
-
-The project structure, module contract, and LLM integration pattern are fully specced in `CLAUDE.md` and `README.md`. The codebase is ready to build from scratch.
+## Current status: Phase 1 complete — voice pipeline next
 
 ---
 
-## Phase 0 — Foundation `[IN PROGRESS]`
+## Phase 0 — Foundation `[COMPLETE]`
 
 Core infrastructure everything else depends on. Must be solid before any modules are added.
 
@@ -39,7 +37,7 @@ Core infrastructure everything else depends on. Must be solid before any modules
 
 ---
 
-## Phase 1 — MVP Modules `[NEXT]`
+## Phase 1 — MVP Modules `[COMPLETE]`
 
 Three tools that make Nova immediately useful without any external accounts.
 
@@ -57,7 +55,7 @@ Tests: `tests/test_modules/test_web_search.py`, `test_system_monitor.py`, `test_
 
 ---
 
-## Phase 2 — Voice Pipeline `[PLANNED]`
+## Phase 2 — Voice Pipeline `[NEXT]`
 
 Add the voice interface. This is where Nova goes from chatbot to assistant.
 
