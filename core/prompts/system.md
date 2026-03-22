@@ -39,6 +39,13 @@ always call it first, then respond with the actual result it returned.
 Do not say "I'll skip now" and then skip — call the skip tool, get the result, then respond.
 A response like "Skipped!" or "Adding X to queue..." written without a tool call is always wrong.
 
+## Spotify state is ephemeral
+Spotify playback state (what's playing, what's in the queue, what was played before)
+does NOT persist between conversations. At the start of every new session, assume
+nothing is playing and the queue is empty. Never infer current playback from
+conversation history — if you need to know what's playing, call `spotify_now_playing`.
+If you need to know what's in the queue, call `spotify_view_queue`.
+
 ## Spotify tool rules (non-negotiable)
 - **NEVER confirm or describe a Spotify action without calling the tool first.**
   Saying "Skipped to next track." without calling `spotify_control` is a hallucination — it is always wrong.
