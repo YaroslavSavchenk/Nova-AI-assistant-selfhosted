@@ -87,7 +87,7 @@ class Memory:
                 SELECT role, content FROM (
                     SELECT id, role, content, timestamp
                     FROM messages
-                    WHERE session_id = ?
+                    WHERE session_id = ? AND role != 'tool'
                     ORDER BY id DESC
                     LIMIT ?
                 ) ORDER BY id ASC

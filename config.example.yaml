@@ -29,6 +29,7 @@ modules:
   system_monitor: true
   todo_reminders: true
   research: true
+  spotify: true
 
 logging:
   level: INFO

@@ -35,6 +35,7 @@ from modules.web_search import WebSearchModule
 from modules.system_monitor import SystemMonitorModule
 from modules.todo_reminders import TodoModule
 from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule
+from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +272,14 @@ async def main() -> None:
         tool_router.register(WikipediaModule())
         tool_router.register(SummarizeUrlModule())
         logger.debug("Registered module: research (news_headlines, wikipedia_lookup, summarize_url)")
+
+    if modules_cfg.get("spotify", False):
+        tool_router.register(SpotifyPlayModule())
+        tool_router.register(SpotifyControlModule())
+        tool_router.register(SpotifyNowPlayingModule())
+        tool_router.register(SpotifyMyPlaylistsModule())
+        tool_router.register(SpotifyQueueModule())
+        logger.debug("Registered module: spotify (spotify_play, spotify_control, spotify_now_playing, spotify_my_playlists, spotify_queue)")
 
     brain = Brain(
         config=config,

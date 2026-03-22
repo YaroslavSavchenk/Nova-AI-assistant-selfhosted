@@ -103,9 +103,23 @@ async def test_db_created_if_not_exists(tmp_path):
 
 @pytest.mark.asyncio
 async def test_tool_message_stored_with_tool_name(memory):
-    """Tool messages are stored and retrieved correctly."""
+    """Tool messages are stored in the DB (but filtered from get_context)."""
     await memory.add_message("s3", "tool", "Echo: hello", tool_name="echo")
+
+    # get_context intentionally filters tool messages for LLM context building
     ctx = await memory.get_context("s3")
-    assert len(ctx) == 1
-    assert ctx[0]["role"] == "tool"
-    assert ctx[0]["content"] == "Echo: hello"
+    assert len(ctx) == 0
+
+    # Verify the message was actually persisted via direct DB query
+    import aiosqlite
+    async with aiosqlite.connect(memory.db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT role, content, tool_name FROM messages WHERE session_id = ?",
+            ("s3",),
+        ) as cursor:
+            rows = await cursor.fetchall()
+    assert len(rows) == 1
+    assert rows[0]["role"] == "tool"
+    assert rows[0]["content"] == "Echo: hello"
+    assert rows[0]["tool_name"] == "echo"
