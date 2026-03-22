@@ -1,10 +1,11 @@
 """
-Web search module for Nova — uses DuckDuckGo via duckduckgo-search.
+Web search module for Nova — uses DuckDuckGo via ddgs.
 """
 
+import asyncio
 import logging
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from modules.base import NovaModule
 
 logger = logging.getLogger(__name__)
@@ -42,8 +43,11 @@ class WebSearchModule(NovaModule):
             max_results: int = int(kwargs.get("max_results", 5))
             max_results = min(max(max_results, 1), 10)
 
-            async with DDGS() as ddgs:
-                results = await ddgs.atext(query, max_results=max_results)
+            # ddgs is sync-only — run in thread executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                None, lambda: DDGS().text(query, max_results=max_results)
+            )
 
             if not results:
                 return f"No results found for: {query}"
