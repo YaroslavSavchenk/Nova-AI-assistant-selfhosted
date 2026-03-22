@@ -11,9 +11,20 @@ memory:
 
 voice:
   enabled: false
-  stt_model: large-v3
-  tts_model: xtts_v2
-  wake_word: hey nova
+  stt:
+    model_size: base        # "base", "small", "medium", "large-v3", "distil-large-v3"
+    language: null          # null = auto-detect, or "en", "nl", "ru"
+    device: cpu             # "cpu" recommended to save VRAM for the LLM
+    listen_duration: 5.0    # Seconds to record after wake word fires
+  tts:
+    model: tts_models/multilingual/multi-dataset/xtts_v2
+    speaker_wav: null       # Path to reference audio for voice cloning, or null for default
+    language: en
+    device: cpu
+  wake_word:
+    enabled: true
+    model: alexa            # Built-in: "alexa", "hey_mycroft". Custom: "hey_nova" (needs ONNX file)
+    threshold: 0.5
 
 modules:
   web_search: true

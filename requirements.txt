@@ -12,3 +12,4 @@ sounddevice>=0.4
 soundfile>=0.12
 openwakeword>=0.6
 TTS>=0.22
+numpy>=1.24

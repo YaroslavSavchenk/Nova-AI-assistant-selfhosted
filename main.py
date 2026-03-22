@@ -3,7 +3,7 @@ main.py — Nova AI Assistant entry point.
 
 Usage:
     python main.py                      # text mode, default session
-    python main.py --voice              # voice input/output (future)
+    python main.py --voice              # voice input/output
     python main.py --debug              # verbose logging
     python main.py --session work       # named session
 """
@@ -59,7 +59,7 @@ class EchoModule(NovaModule):
 
 
 # ---------------------------------------------------------------------------
-# REPL
+# Text REPL
 # ---------------------------------------------------------------------------
 
 
@@ -86,6 +86,77 @@ async def repl(brain: Brain, session_id: str) -> None:
         except Exception as exc:
             logging.getLogger(__name__).exception("Unexpected error in brain.chat")
             print(f"[Error] Something went wrong: {exc}\n")
+
+
+# ---------------------------------------------------------------------------
+# Voice REPL
+# ---------------------------------------------------------------------------
+
+
+async def voice_repl(
+    brain: Brain,
+    session_id: str,
+    listener,
+    speaker,
+    wake_detector,
+    voice_cfg: dict,
+) -> None:
+    """
+    Voice interaction loop.
+
+    If wake word detection is enabled: waits for the wake word, then records
+    and responds. If wake word is disabled or unavailable: press Enter to
+    trigger a recording (push-to-talk).
+    """
+    logger = logging.getLogger(__name__)
+    stop_event = asyncio.Event()
+    listen_duration: float = voice_cfg.get("stt", {}).get("listen_duration", 5.0)
+    wake_cfg = voice_cfg.get("wake_word", {})
+    wake_enabled = wake_cfg.get("enabled", True)
+
+    async def handle_interaction() -> None:
+        """Record speech, get response, speak it."""
+        print("Listening...", end="\r", flush=True)
+        user_text = await listener.listen_once(duration=listen_duration)
+        print(" " * 20, end="\r")
+
+        if not user_text.strip():
+            logger.debug("Empty transcription — ignoring.")
+            return
+
+        print(f"\nYou: {user_text}")
+        print("Nova is thinking...", end="\r", flush=True)
+
+        response = await brain.chat(user_text, session_id=session_id)
+        print(" " * 20, end="\r")
+        print(f"Nova: {response}\n")
+
+        # Detect language for TTS (mirror user language)
+        tts_lang = voice_cfg.get("tts", {}).get("language", "en")
+        await speaker.speak(response, language=tts_lang)
+
+    print("Nova voice mode active. Say the wake word to start, or Ctrl-C to exit.\n")
+
+    try:
+        if wake_enabled:
+            await wake_detector.listen_for_wake_word(
+                callback=handle_interaction,
+                stop_event=stop_event,
+            )
+        else:
+            # Push-to-talk fallback: press Enter to record
+            print("(Wake word disabled — press Enter to speak)\n")
+            while True:
+                try:
+                    input("")
+                except (EOFError, KeyboardInterrupt):
+                    break
+                await handle_interaction()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_event.set()
+        print("\nGoodbye.")
 
 
 # ---------------------------------------------------------------------------
@@ -188,9 +259,41 @@ async def main() -> None:
     )
 
     if args.voice:
-        logger.warning("Voice mode is not yet implemented — falling back to text mode.")
+        voice_cfg = config.get("voice", {})
+        stt_cfg = voice_cfg.get("stt", {})
+        tts_cfg = voice_cfg.get("tts", {})
+        wake_cfg = voice_cfg.get("wake_word", {})
 
-    await repl(brain, session_id=args.session)
+        from voice.listener import Listener
+        from voice.speaker import Speaker
+        from voice.wake_word import WakeWordDetector
+
+        listener = Listener(
+            model_size=stt_cfg.get("model_size", "base"),
+            language=stt_cfg.get("language") or None,
+            device=stt_cfg.get("device", "cpu"),
+        )
+        speaker = Speaker(
+            model_name=tts_cfg.get("model", "tts_models/multilingual/multi-dataset/xtts_v2"),
+            speaker_wav=tts_cfg.get("speaker_wav") or None,
+            language=tts_cfg.get("language", "en"),
+            device=tts_cfg.get("device", "cpu"),
+        )
+        wake_detector = WakeWordDetector(
+            model_name=wake_cfg.get("model", "alexa"),
+            threshold=wake_cfg.get("threshold", 0.5),
+        )
+
+        await voice_repl(
+            brain=brain,
+            session_id=args.session,
+            listener=listener,
+            speaker=speaker,
+            wake_detector=wake_detector,
+            voice_cfg=voice_cfg,
+        )
+    else:
+        await repl(brain, session_id=args.session)
 
 
 if __name__ == "__main__":
