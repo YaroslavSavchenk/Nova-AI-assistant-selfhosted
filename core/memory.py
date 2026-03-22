@@ -85,12 +85,12 @@ class Memory:
             async with db.execute(
                 """
                 SELECT role, content FROM (
-                    SELECT role, content, timestamp
+                    SELECT id, role, content, timestamp
                     FROM messages
                     WHERE session_id = ?
-                    ORDER BY timestamp DESC, id DESC
+                    ORDER BY id DESC
                     LIMIT ?
-                ) ORDER BY timestamp ASC, id ASC
+                ) ORDER BY id ASC
                 """,
                 (session_id, max_messages),
             ) as cursor:
