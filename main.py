@@ -74,7 +74,9 @@ async def repl(brain: Brain, session_id: str) -> None:
             continue
 
         try:
+            print("Nova is thinking...", end="\r", flush=True)
             response = await brain.chat(user_input, session_id=session_id)
+            print(" " * 20, end="\r")  # clear the thinking line
             print(f"\n{response}\n")
         except Exception as exc:
             logging.getLogger(__name__).exception("Unexpected error in brain.chat")

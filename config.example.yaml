@@ -2,7 +2,7 @@ brain:
   provider: ollama
   model: qwen3:14b
   base_url: http://localhost:11434
-  thinking: true  # Enable /think for tool calls, complex reasoning
+  thinking: false  # Enable /think for tool calls, complex reasoning
   thinking_fast: false  # /no_think for casual chat
 
 memory:
