@@ -192,7 +192,7 @@ class Brain:
                 for tc in response.tool_calls:
                     tool_name = tc["name"]
                     tool_args = tc.get("arguments", {})
-                    logger.info("Tool call: %s(%s)", tool_name, tool_args)
+                    logger.debug("Tool call: %s(%s)", tool_name, tool_args)
 
                     result = await self._tool_router.dispatch(tool_name, tool_args)
                     logger.debug("Tool result: %s", result)
