@@ -28,7 +28,7 @@ She uses a local LLM (Qwen 3 14B) through Ollama for reasoning, a modular tool s
 
 - **Local-first** — Brain, voice, and memory all run on your hardware. Your conversations stay yours.
 - **Tool-calling architecture** — Nova doesn't just chat. She searches the web, monitors your system, manages todos, and more — with a plugin system that makes adding new capabilities straightforward.
-- **Voice interface** — Faster-Whisper for ears, Coqui XTTS v2 for mouth, "Hey Nova" wake word. All running on GPU.
+- **Voice interface** — Faster-Whisper for ears, edge-tts for mouth, "Hey Nova" wake word. All running on CPU to preserve VRAM for the LLM.
 - **Trilingual** — Speaks English, Dutch, and Russian. Automatically mirrors whatever language you use.
 - **Personality** — Not a generic chatbot. Nova has character — sharp wit with casual warmth.
 - **Expandable** — Provider abstraction means Claude, OpenAI, or any other LLM can be added as an alternative brain without rewriting the core.
@@ -70,8 +70,8 @@ You (voice / text)
     ↕
 ┌─────────────────────────────────────────┐
 │           Voice Pipeline                │
-│   Faster-Whisper → Nova → XTTS v2      │
-│   (STT, GPU)       Core   (TTS, GPU)   │
+│   Faster-Whisper → Nova → edge-tts     │
+│   (STT, CPU)       Core   (TTS, CPU)   │
 │            "Hey Nova" wake word         │
 └─────────────────────────────────────────┘
 ```
@@ -139,8 +139,9 @@ nova/
 │   ├── ollama_provider.py   # Local Ollama inference
 │   └── claude_provider.py   # Anthropic API (future)
 ├── voice/
-│   ├── listener.py          # Faster-Whisper STT
-│   └── speaker.py           # Coqui XTTS v2 TTS
+│   ├── listener.py          # Faster-Whisper STT + webrtcvad silence detection
+│   ├── speaker.py           # edge-tts TTS
+│   └── wake_word.py         # Whisper-based "Hey Nova" wake word
 ├── modules/
 │   ├── base.py              # NovaModule base class
 │   ├── web_search.py        # DuckDuckGo search
@@ -164,7 +165,7 @@ Nova's capabilities are modular. Each module is a self-contained tool that the L
 
 | Module | Description | External deps |
 |--------|-------------|---------------|
-| **Web search** | Search the internet via DuckDuckGo | `duckduckgo-search` (no API key) |
+| **Web search** | Search the internet via DuckDuckGo | `ddgs` (no API key) |
 | **System monitor** | CPU, RAM, GPU usage and disk info | `psutil`, `GPUtil` |
 | **Todo / reminders** | Create, list, complete todos with scheduled reminders | SQLite (built-in) |
 
@@ -172,10 +173,10 @@ Nova's capabilities are modular. Each module is a self-contained tool that the L
 
 | Phase | Module | Status |
 |-------|--------|--------|
-| 2 | Smart home (Home Assistant) | Planned |
-| 3 | News & research | Planned |
-| 4 | Spotify integration | Planned |
-| 5 | Calendar & Email (Google APIs) | Planned |
+| 3 | Smart home (Home Assistant) | Next |
+| 4 | News & research | Planned |
+| 5 | Spotify integration | Planned |
+| 6 | Calendar & Email (Google APIs) | Planned |
 
 ### Creating a new module
 
@@ -229,11 +230,12 @@ All voice processing runs locally on GPU:
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| STT | Faster-Whisper | Speech recognition (EN/NL/RU) |
-| TTS | Coqui XTTS v2 | Natural speech synthesis with voice cloning |
-| Wake word | TBD (Porcupine / OpenWakeWord) | "Hey Nova" activation |
+| STT | Faster-Whisper (`base`, CPU) | Speech recognition, EN/NL/RU auto-detect |
+| TTS | edge-tts (Microsoft neural voices) | Natural speech synthesis, no API key |
+| Wake word | Whisper `tiny` (CPU, fully offline) | "Hey Nova" / "Nova" activation |
+| VAD | webrtcvad (aggressiveness=3) | Silence detection — only real speech resets the timer |
 
-**Note on VRAM:** The LLM (~11 GB) + STT (~2 GB) + TTS (~2 GB) exceed 12 GB VRAM. The voice models can run on CPU with your Ryzen 7800X3D without noticeable latency, or models can be swapped in/out of VRAM as needed.
+**VRAM:** All voice models run on CPU — the full 12 GB stays free for the LLM.
 
 ## Development
 

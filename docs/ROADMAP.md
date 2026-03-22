@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 1 complete — voice pipeline next
+## Current status: Phase 2 complete — smart home next
 
 ---
 
@@ -55,7 +55,7 @@ Tests: `tests/test_modules/test_web_search.py`, `test_system_monitor.py`, `test_
 
 ---
 
-## Phase 2 — Voice Pipeline `[NEXT]`
+## Phase 2 — Voice Pipeline `[COMPLETE]`
 
 Add the voice interface. This is where Nova goes from chatbot to assistant.
 
@@ -63,32 +63,24 @@ Add the voice interface. This is where Nova goes from chatbot to assistant.
 
 | Component | Technology | Notes |
 |-----------|-----------|-------|
-| STT | Faster-Whisper (large-v3 or distil-large-v3) | GPU inference, EN/NL/RU |
-| TTS | Coqui XTTS v2 | Voice cloning from a short sample |
-| Wake word | OpenWakeWord (`hey_nova` model) | Always-on listening |
-| Audio routing | PulseAudio/PipeWire in WSL2 | May need Windows-side fallback |
+| STT | Faster-Whisper `base` | CPU inference, EN/NL/RU auto-detect |
+| TTS | edge-tts (Microsoft neural voices) | No API key, Python 3.12 compatible |
+| Wake word | Whisper `tiny` model | Fully offline, "Hey Nova" / "Nova" |
+| VAD | webrtcvad (aggressiveness=3) | Only real speech resets silence timer |
+| Audio routing | PulseAudio via WSLg | `PULSE_SERVER=unix:/mnt/wslg/PulseServer` |
 
 **Files:**
-- `voice/listener.py` — STT loop, returns transcribed text
-- `voice/speaker.py` — TTS synthesis, streams audio output
-- `voice/wake_word.py` — Hotword detection, triggers listener
+- `voice/listener.py` — Faster-Whisper STT, webrtcvad silence detection
+- `voice/speaker.py` — edge-tts TTS, voice map per language
+- `voice/wake_word.py` — Whisper-based wake word detection
 
-**VRAM budget concern:**
-- LLM (Qwen 3 14B Q5_K_M): ~10–11 GB
-- Faster-Whisper large-v3: ~2 GB
-- XTTS v2: ~2 GB
-- Total: ~14–15 GB → exceeds 12 GB VRAM
-
-**Resolution options (pick one):**
-1. Run STT + TTS on CPU (Ryzen 7800X3D handles this fine for these model sizes)
-2. Use distil-large-v3 for STT (~1 GB) + swap models in/out of VRAM
-3. Use Piper TTS instead of XTTS (much smaller, CPU-native, less natural)
+**VRAM budget:** All voice models run on CPU — full 12 GB VRAM stays free for the LLM.
 
 **Done when:** `python main.py --voice` lets you speak to Nova and hear a response, with wake word activation.
 
 ---
 
-## Phase 3 — Smart Home `[PLANNED]`
+## Phase 3 — Smart Home `[NEXT]`
 
 Control Home Assistant devices through Nova.
 
