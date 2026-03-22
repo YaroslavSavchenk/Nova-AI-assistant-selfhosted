@@ -1,0 +1,25 @@
+brain:
+  provider: ollama
+  model: qwen3:14b
+  base_url: http://localhost:11434
+  thinking: true  # Enable /think for tool calls, complex reasoning
+  thinking_fast: false  # /no_think for casual chat
+
+memory:
+  db_path: data/memory.db
+  max_context_messages: 20  # How many messages to keep in context window
+
+voice:
+  enabled: false
+  stt_model: large-v3
+  tts_model: xtts_v2
+  wake_word: hey nova
+
+modules:
+  web_search: false
+  system_monitor: false
+  todo_reminders: false
+
+logging:
+  level: INFO
+  file: null  # Set to a path to log to file
