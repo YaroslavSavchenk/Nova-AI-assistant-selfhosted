@@ -322,6 +322,18 @@ async def test_control_next(control_module):
     assert "In the End" in result
 
 
+async def test_control_next_with_count(control_module):
+    """action='next' with count=3 skips 3 tracks."""
+    sp = _mock_sp()
+    with patch("modules.spotify._get_client", return_value=sp), \
+         patch("modules.spotify._now_playing_text", return_value="Now playing: Thunder by Imagine Dragons"):
+        result = await control_module.run(action="next", count=3)
+
+    assert sp.next_track.call_count == 3
+    assert "3" in result
+    assert "Thunder" in result
+
+
 async def test_control_previous(control_module):
     sp = _mock_sp()
     with patch("modules.spotify._get_client", return_value=sp), \
@@ -755,18 +767,18 @@ async def test_view_queue_nothing_playing(view_queue_module):
     assert "nothing" in result.lower() or "not playing" in result.lower()
 
 
-async def test_view_queue_caps_at_ten(view_queue_module):
-    """Queue display is capped at 10 tracks with overflow note."""
+async def test_view_queue_caps_at_five(view_queue_module):
+    """Queue display is capped at 5 tracks with overflow note for album/autoplay tracks."""
     sp = _mock_sp()
     sp.queue.return_value = _fake_queue(
-        next_tracks=[{"name": f"Song {i}", "artists": [{"name": "Artist"}]} for i in range(15)]
+        next_tracks=[{"name": f"Song {i}", "artists": [{"name": "Artist"}]} for i in range(10)]
     )
 
     with patch("modules.spotify._get_client", return_value=sp):
         result = await view_queue_module.run()
 
-    assert "10." in result
-    assert "11." not in result
+    assert "5." in result
+    assert "6." not in result
     assert "5 more" in result
 
 

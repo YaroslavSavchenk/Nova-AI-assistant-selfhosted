@@ -299,6 +299,7 @@ class SpotifyControlModule(NovaModule):
         "Use this to: pause, resume, skip, skip song, next song, next track, go to next, go forward, "
         "previous song, previous track, go back, go to previous, set volume, change volume, "
         "turn shuffle on/off, or toggle shuffle. "
+        "To skip multiple songs at once (e.g. 'go straight to X', 'skip 3 songs'), use action='next' with count > 1. "
         "Trigger phrases that require this tool: 'skip', 'next', 'next song', 'skip song', "
         "'skip this', 'skip track', 'go to next', 'go forward', 'previous', 'go back', 'last song', "
         "'pause', 'pause this', 'stop music', 'resume', 'continue', 'unpause', "
@@ -312,12 +313,20 @@ class SpotifyControlModule(NovaModule):
                 "type": "string",
                 "description": (
                     "Action to perform. Allowed values: 'pause', 'resume', 'next', 'previous', 'volume', 'shuffle'. "
-                    "Use 'next' to skip or go to the next song (triggers: skip, next song, go to next, forward). "
-                    "Use 'previous' to go back or replay the previous song (triggers: previous song, go back, last song). "
-                    "Use 'resume' to continue playback (triggers: resume, continue, unpause). "
+                    "Use 'next' to skip forward (use count to skip multiple songs at once). "
+                    "Use 'previous' to go back or replay the previous song. "
+                    "Use 'resume' to continue playback. "
                     "Use 'pause' to stop playback. "
                     "Use 'volume' with the volume parameter to set loudness. "
                     "Use 'shuffle' with the state parameter to enable, disable, or toggle shuffle."
+                ),
+            },
+            "count": {
+                "type": "integer",
+                "description": (
+                    "Number of tracks to skip. Only used when action is 'next'. Defaults to 1. "
+                    "Use this when the user wants to jump multiple songs — e.g. 'skip 3 songs' → count=3, "
+                    "'go straight to X' when X is 2 songs ahead → count=2."
                 ),
             },
             "volume": {
@@ -355,8 +364,13 @@ class SpotifyControlModule(NovaModule):
                 return "Spotify resumed."
 
             elif action == "next":
-                sp.next_track(device_id=device_id)
-                return "Skipped. " + await _now_playing_text(sp)
+                count = max(1, int(kwargs.get("count", 1)))
+                for _ in range(count):
+                    sp.next_track(device_id=device_id)
+                    if count > 1:
+                        await asyncio.sleep(0.3)
+                label = f"Skipped {count} tracks." if count > 1 else "Skipped."
+                return label + " " + await _now_playing_text(sp)
 
             elif action == "previous":
                 sp.previous_track(device_id=device_id)
@@ -646,13 +660,16 @@ class SpotifyViewQueueModule(NovaModule):
             if not queue:
                 lines.append("Queue is empty — nothing coming up next.")
             else:
-                lines.append(f"\nUp next ({len(queue)} track{'s' if len(queue) != 1 else ''}):")
-                for i, track in enumerate(queue[:10], 1):
+                # Spotify returns explicitly queued tracks first, then album/context
+                # autofill tracks. Show only the first 5 to avoid noise.
+                display = queue[:5]
+                lines.append(f"\nUp next:")
+                for i, track in enumerate(display, 1):
                     name = track.get("name", "Unknown")
                     artist = track.get("artists", [{}])[0].get("name", "Unknown")
                     lines.append(f"  {i}. {name} by {artist}")
-                if len(queue) > 10:
-                    lines.append(f"  ... and {len(queue) - 10} more")
+                if len(queue) > 5:
+                    lines.append(f"  (+ {len(queue) - 5} more from album/autoplay)")
 
             return "\n".join(lines)
 
