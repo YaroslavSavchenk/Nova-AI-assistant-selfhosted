@@ -8,7 +8,7 @@ audio hardware is required.
 import asyncio
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -25,12 +25,18 @@ def _make_fake_openwakeword(model_name: str, score: float):
     oww_pkg = ModuleType("openwakeword")
     oww_model_mod = ModuleType("openwakeword.model")
 
+    fake_model_path = f"/fake/models/{model_name}.onnx"
+
+    # get_pretrained_model_paths returns a list containing the fake path
+    oww_pkg.get_pretrained_model_paths = lambda: [fake_model_path]
+
     class FakeModel:
-        def __init__(self, wakeword_models=None, inference_framework=None):
-            self._model_name = wakeword_models[0] if wakeword_models else ""
+        def __init__(self, wakeword_model_paths=None, **kwargs):
+            self._path = wakeword_model_paths[0] if wakeword_model_paths else ""
+            self._name = model_name
 
         def predict(self, chunk):
-            return {self._model_name: score}
+            return {self._name: score}
 
     oww_model_mod.Model = FakeModel
     oww_pkg.model = oww_model_mod
@@ -40,8 +46,7 @@ def _make_fake_openwakeword(model_name: str, score: float):
 def _make_fake_sounddevice(chunks):
     """
     Return a fake sounddevice module whose InputStream yields *chunks* one
-    by one through stream.read(), then raises StopIteration (causing the
-    stream loop to exit).
+    by one through stream.read(), then raises RuntimeError to end the stream.
     """
     import numpy as np
 
@@ -55,7 +60,6 @@ def _make_fake_sounddevice(chunks):
             try:
                 chunk = next(self._iter)
             except StopIteration:
-                # Simulate end-of-stream by raising an error the thread handles
                 raise RuntimeError("stream exhausted")
             return np.array(chunk, dtype="int16").reshape(-1, 1), False
 
@@ -81,7 +85,7 @@ class TestWakeWordCallbackFires:
 
         fake_chunk = np.zeros(1280, dtype="int16")
         fake_sd = _make_fake_sounddevice([fake_chunk])
-        fake_oww_mods = _make_fake_openwakeword("hey_nova", score=0.9)
+        fake_oww_mods = _make_fake_openwakeword("alexa", score=0.9)
 
         callback_called = asyncio.Event()
 
@@ -95,9 +99,7 @@ class TestWakeWordCallbackFires:
             import voice.wake_word as ww_mod
             importlib.reload(ww_mod)
 
-            detector = ww_mod.WakeWordDetector(model_name="hey_nova", threshold=0.5)
-            # The stream raises RuntimeError after one chunk, which causes the
-            # thread to exit and sends None → loop exits without needing stop_event
+            detector = ww_mod.WakeWordDetector(model_name="alexa", threshold=0.5)
             await detector.listen_for_wake_word(fake_callback, stop_event)
 
         assert callback_called.is_set(), "Callback should have been called"
@@ -107,19 +109,15 @@ class TestWakeWordStopsOnEvent:
     @pytest.mark.asyncio
     async def test_wake_word_stops_when_stop_event_set(self):
         """
-        Setting the stop_event causes listen_for_wake_word to return cleanly
-        even while the stream is running.
+        Setting the stop_event causes listen_for_wake_word to return cleanly.
         """
         import numpy as np
 
-        # Provide many chunks so the stream would never naturally end
         many_chunks = [np.zeros(1280, dtype="int16")] * 10
         fake_sd = _make_fake_sounddevice(many_chunks)
-        # Score is below threshold so callback never fires
-        fake_oww_mods = _make_fake_openwakeword("hey_nova", score=0.1)
+        fake_oww_mods = _make_fake_openwakeword("alexa", score=0.1)
 
         callback = MagicMock()
-
         stop_event = asyncio.Event()
 
         with patch.dict(sys.modules, {**fake_oww_mods, "sounddevice": fake_sd}):
@@ -127,9 +125,8 @@ class TestWakeWordStopsOnEvent:
             import voice.wake_word as ww_mod
             importlib.reload(ww_mod)
 
-            detector = ww_mod.WakeWordDetector(model_name="hey_nova", threshold=0.5)
+            detector = ww_mod.WakeWordDetector(model_name="alexa", threshold=0.5)
 
-            # Set the stop event after a short delay while detection runs
             async def _set_stop():
                 await asyncio.sleep(0.05)
                 stop_event.set()
@@ -139,7 +136,6 @@ class TestWakeWordStopsOnEvent:
                 _set_stop(),
             )
 
-        # Verify the function returned (test would hang otherwise)
         assert stop_event.is_set()
         callback.assert_not_called()
 
@@ -154,7 +150,6 @@ class TestWakeWordGracefulDegradation:
         callback = MagicMock()
         stop_event = asyncio.Event()
 
-        # Remove openwakeword from sys.modules to simulate it not being installed
         modules_override = {
             "openwakeword": None,
             "openwakeword.model": None,
@@ -165,9 +160,8 @@ class TestWakeWordGracefulDegradation:
             import voice.wake_word as ww_mod
             importlib.reload(ww_mod)
 
-            detector = ww_mod.WakeWordDetector(model_name="hey_nova", threshold=0.5)
+            detector = ww_mod.WakeWordDetector(model_name="alexa", threshold=0.5)
 
-            # Set stop_event immediately so the fallback path exits right away
             stop_event.set()
             await detector.listen_for_wake_word(callback, stop_event)
 

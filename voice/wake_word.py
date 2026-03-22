@@ -56,10 +56,24 @@ class WakeWordDetector:
             True on success, False if the package/model is unavailable.
         """
         try:
+            import openwakeword  # noqa: PLC0415
             from openwakeword.model import Model  # noqa: PLC0415
 
+            # Resolve model name to a file path for built-in models
+            all_paths = openwakeword.get_pretrained_model_paths()
+            matched = [p for p in all_paths if self.model_name.lower() in p.lower()]
+            if not matched:
+                log.warning(
+                    "No built-in OpenWakeWord model found for '%s'. "
+                    "Available: %s",
+                    self.model_name,
+                    [p.split("/")[-1] for p in all_paths],
+                )
+                return False
+
+            model_path = matched[0]
             log.info("Loading OpenWakeWord model '%s' …", self.model_name)
-            self._oww_model = Model(wakeword_models=[self.model_name], inference_framework="onnx")
+            self._oww_model = Model(wakeword_model_paths=[model_path])
             log.info("OpenWakeWord model '%s' loaded.", self.model_name)
             return True
         except ImportError:
