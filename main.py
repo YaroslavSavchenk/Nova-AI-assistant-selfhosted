@@ -11,8 +11,14 @@ Usage:
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
+
+# WSL2: PulseAudio is served by WSLg — point sounddevice/portaudio at it
+_WSL_PULSE_SERVER = "/mnt/wslg/PulseServer"
+if Path(_WSL_PULSE_SERVER).exists() and "PULSE_SERVER" not in os.environ:
+    os.environ["PULSE_SERVER"] = f"unix:{_WSL_PULSE_SERVER}"
 
 from core.config_loader import load_config
 from core.memory import Memory
