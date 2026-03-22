@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 4 complete — starting Phase 5 (Spotify Lyrics Search)
+## Current status: Phase 5 complete — starting Phase 6 (Google Calendar)
 
 ---
 
@@ -104,28 +104,32 @@ Give Nova better research capabilities beyond a single web search.
 
 Music control through natural language.
 
-**Module:** `modules/spotify.py`
+**Module:** `modules/spotify/` (package)
 
 **Integration:** Spotify Web API (OAuth 2.0 via spotipy)
 
 **Capabilities:**
-- Play track, artist, album, or playlist by name
+- Play track, artist, album, or playlist by name (album context for correct queue behavior)
 - Play user's own playlists (fuzzy name matching) or public playlists
 - Play Liked Songs collection
-- Pause, resume, skip, previous
+- Pause, resume, skip, previous (with repeat count)
+- Skip directly to a named song in the queue (fuzzy + `&`/`and` normalization)
 - Volume control (0–100)
 - Shuffle toggle (on / off / toggle)
 - Query current playback — track, artist, album, progress
 - Add a track to the queue ("play X next")
+- View the current queue (deduplicated, up to 5 tracks)
 - List all user playlists (created + saved/followed), with Liked Songs count
 
 **Tools registered:**
 | Tool | Description |
 |------|-------------|
 | `spotify_play` | Search and play track / artist / album / playlist |
-| `spotify_control` | Pause, resume, next, previous, volume, shuffle |
+| `spotify_control` | Pause, resume, next, previous, volume, shuffle (with optional count) |
 | `spotify_now_playing` | Get current track info and progress |
 | `spotify_queue` | Add a track to the playback queue |
+| `spotify_view_queue` | Show what's currently in the playback queue |
+| `spotify_skip_to` | Skip forward to a specific song by name |
 | `spotify_my_playlists` | List user's playlists |
 
 **Config needed in `.env`:** `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`
@@ -134,13 +138,13 @@ Music control through natural language.
 
 ---
 
-## Phase 5 — Spotify Lyrics Search `[NEXT]`
+## Phase 5 — Spotify Lyrics Search `[COMPLETE]`
 
 Find songs from lyric snippets and confirm before playing.
 
 **Problem:** `spotify_play` searches by title/artist only — half-remembered song names, foreign lyrics, or vague descriptions all fail. This phase lets the user hum a line and have Nova identify and confirm the track.
 
-**Module:** `modules/spotify_lyrics_search.py`
+**Module:** `modules/spotify/lyrics_search.py`
 
 **Tool registered:**
 
@@ -159,13 +163,10 @@ Find songs from lyric snippets and confirm before playing.
 **Tech stack:**
 - **Genius API** — `GET https://api.genius.com/search?q=<lyric>` with Bearer auth
 - `httpx` — already in `requirements.txt`, no new dependencies
-- Register at genius.com/api-clients (free)
 
 **Config needed in `.env`:** `GENIUS_ACCESS_TOKEN`
 
 **Tests:** `tests/test_modules/test_spotify_lyrics_search.py`
-
-**Done when:** User can say a lyric line, Nova identifies the correct song, asks for confirmation, and plays it on approval.
 
 ---
 

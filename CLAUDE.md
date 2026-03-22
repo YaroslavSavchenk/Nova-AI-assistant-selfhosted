@@ -34,13 +34,22 @@ nova/
 ├── voice/
 │   ├── listener.py          # STT (Speech-to-Text) via Whisper API
 │   └── speaker.py           # TTS (Text-to-Speech) via ElevenLabs/Piper
-├── modules/                 # Each file = one tool Nova can use
+├── modules/                 # Each file/package = one tool Nova can use
 │   ├── base.py              # Abstract base class all modules implement
 │   ├── web_search.py
 │   ├── system_monitor.py
 │   ├── todo_reminders.py
 │   ├── research.py
-│   └── spotify.py
+│   └── spotify/             # Spotify package (split from spotify.py)
+│       ├── __init__.py      # Re-exports all public module classes
+│       ├── _client.py       # Shared spotipy client + device helpers
+│       ├── _helpers.py      # Shared formatting/parsing helpers
+│       ├── play.py          # SpotifyPlayModule
+│       ├── control.py       # SpotifyControlModule, SpotifySkipToModule
+│       ├── now_playing.py   # SpotifyNowPlayingModule
+│       ├── queue.py         # SpotifyQueueModule, SpotifyViewQueueModule
+│       ├── playlists.py     # SpotifyMyPlaylistsModule
+│       └── lyrics_search.py # SpotifyLyricsSearchModule (Genius API)
 ├── data/
 │   └── memory.db            # SQLite database (gitignored)
 └── tests/
@@ -115,6 +124,12 @@ STT and TTS run in separate async tasks so Nova can listen while speaking is sti
 - Branch naming: `feature/module-name` or `fix/description`
 - Commit messages: imperative mood, e.g. "Add Spotify module" not "Added Spotify module"
 - Never commit `config.yaml`, `data/memory.db`, or any `.env` files
+
+## Session Management
+
+- **Default session**: Each `python main.py` run gets a fresh UUID session (`run-<hex8>`). No history bleed between runs.
+- **Named sessions**: Pass `--session work` to resume a persistent named session with full history.
+- This prevents stale Spotify state (e.g. "Now playing: X") from a previous run contaminating the LLM's context.
 
 ## When Compacting
 
