@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nova — Spotify Auth</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #eee; padding: 40px; }
+    h2 { color: #1db954; }
+    #code-box {
+      background: #222; border: 1px solid #1db954;
+      padding: 16px; margin: 16px 0;
+      word-break: break-all; font-size: 14px;
+    }
+    #error { color: #e74c3c; }
+  </style>
+</head>
+<body>
+  <h2>Nova — Spotify Authorization</h2>
+  <div id="content"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const error = params.get("error");
+    const div = document.getElementById("content");
+
+    if (code) {
+      div.innerHTML = `
+        <p>Authorization successful! Copy the code below and paste it into the terminal.</p>
+        <div id="code-box">${code}</div>
+        <p>You can close this tab when done.</p>
+      `;
+    } else if (error) {
+      div.innerHTML = `<p id="error">Authorization failed: ${error}</p>`;
+    } else {
+      div.innerHTML = `<p id="error">No code received. Make sure you opened the correct URL.</p>`;
+    }
+  </script>
+</body>
+</html>
