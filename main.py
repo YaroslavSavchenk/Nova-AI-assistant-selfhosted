@@ -148,9 +148,6 @@ async def voice_repl(
         tts_lang = voice_cfg.get("tts", {}).get("language", "en")
         await speaker.speak(response, language=tts_lang)
 
-    print("Nova voice mode active. Loading wake word model...", flush=True)
-    print("(First run downloads ~39 MB — cached after that)\n")
-
     try:
         if wake_enabled:
             await wake_detector.listen_for_wake_word(
