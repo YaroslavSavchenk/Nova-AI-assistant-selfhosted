@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 6 complete — starting Phase 7 (Memory Upgrade)
+## Current status: Phase 7 in progress — Memory Upgrade
 
 ---
 
@@ -207,24 +207,48 @@ modules:
 
 ---
 
-## Phase 7 — Memory Upgrade `[PLANNED]`
+## Phase 7 — Memory Upgrade `[IN PROGRESS]`
 
-Upgrade the SQLite conversation log to a full semantic memory system.
+Upgrade Nova from a session-only memory to a persistent long-term memory system.
+Nova now remembers facts about you across sessions and maintains summaries of past conversations.
 
 **Components:**
 
 | Feature | Description | Tech |
 |---------|-------------|------|
-| Session summaries | Compress old conversations into compact recaps | LLM summarization |
-| Fact extraction | Auto-detect user preferences, names, facts | LLM extraction prompt |
-| Manual facts | "Remember that I prefer dark mode" | Explicit user command |
-| Semantic search | Find relevant past memories by meaning | ChromaDB + embeddings |
+| Manual facts | "Remember that I prefer dark mode" | `remember_fact` tool → SQLite |
+| Fact extraction | Auto-extracted from sessions during summarization | LLM JSON prompt |
+| Session summaries | Compressed recaps of past conversations | LLM summarization on session start |
+| Semantic search | Find relevant past memories by meaning | ChromaDB + `nomic-embed-text` (optional) |
 
-**Embedding model:** `nomic-embed-text` via Ollama (runs locally, no API key)
+**Tools registered:**
+
+| Tool | Description |
+|------|-------------|
+| `remember_fact` | Store a long-term fact about the user |
+| `list_facts` | List all stored facts (optionally by category) |
+| `forget_fact` | Delete a fact by ID |
+
+**Architecture:**
+- `core/long_term_memory.py` — `LongTermMemory` class (facts + summaries + optional ChromaDB)
+- `modules/memory/` — package with 3 tools (remember, recall, forget)
+- Facts injected into every system prompt
+- Session summaries injected as past context (recent 3, or semantic search if ChromaDB enabled)
+- Summarization runs at session start for all unprocessed previous sessions
+
+**Embedding model:** `nomic-embed-text` via Ollama (optional — enables semantic search)
+
+**Config:**
+```yaml
+memory:
+  long_term_enabled: true
+  semantic_search: false   # set true + ollama pull nomic-embed-text to enable
+```
 
 **Files:**
-- `core/memory.py` — extend existing SQLite layer
-- `data/chroma/` — ChromaDB persistent store (gitignored)
+- `core/long_term_memory.py` — LongTermMemory class
+- `modules/memory/` — remember, recall, forget tools
+- `data/chroma/` — ChromaDB persistent store (gitignored, only used if semantic_search: true)
 
 ---
 
