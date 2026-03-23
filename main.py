@@ -30,6 +30,7 @@ warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
 
 from core.config_loader import load_config
 from core.memory import Memory
+from core.long_term_memory import LongTermMemory
 from core.tool_router import ToolRouter
 from core.brain import Brain
 from modules.base import NovaModule
@@ -39,6 +40,7 @@ from modules.todo_reminders import TodoModule
 from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule  # noqa: F401 (re-exported from package)
 from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 from modules.calendar import CalendarListEventsModule, CalendarCreateEventModule, CalendarDeleteEventModule
+from modules.memory import RememberFactModule, RecallFactsModule, ForgetFactModule
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +271,18 @@ async def main() -> None:
     memory = Memory(db_path=config["memory"]["db_path"])
     await memory.init()
 
+    # Long-term memory (optional — disabled by config if not wanted)
+    mem_cfg = config.get("memory", {})
+    ltm: LongTermMemory | None = None
+    if mem_cfg.get("long_term_enabled", False):
+        ltm = LongTermMemory(
+            db_path=mem_cfg["db_path"],
+            semantic_search=mem_cfg.get("semantic_search", False),
+            ollama_url=config.get("brain", {}).get("base_url", "http://localhost:11434"),
+        )
+        await ltm.init()
+        logger.debug("Long-term memory enabled (semantic_search=%s)", mem_cfg.get("semantic_search", False))
+
     tool_router = ToolRouter()
     tool_router.register(EchoModule())
 
@@ -303,6 +317,12 @@ async def main() -> None:
         tool_router.register(CalendarDeleteEventModule(calendar_id=cal_id, timezone=cal_tz))
         logger.debug("Registered module: calendar (calendar_list_events, calendar_create_event, calendar_delete_event)")
 
+    if ltm is not None:
+        tool_router.register(RememberFactModule(ltm=ltm))
+        tool_router.register(RecallFactsModule(ltm=ltm))
+        tool_router.register(ForgetFactModule(ltm=ltm))
+        logger.debug("Registered module: memory (remember_fact, list_facts, forget_fact)")
+
     if modules_cfg.get("spotify", False):
         tool_router.register(SpotifyPlayModule())
         tool_router.register(SpotifyControlModule())
@@ -319,6 +339,7 @@ async def main() -> None:
         memory=memory,
         tool_router=tool_router,
         system_prompt=system_prompt,
+        long_term_memory=ltm,
     )
 
     if args.voice:
