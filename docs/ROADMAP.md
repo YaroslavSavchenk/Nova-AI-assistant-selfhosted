@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 7 in progress — Memory Upgrade
+## Current status: Phase 8 next — Provider Abstraction
 
 ---
 
@@ -207,7 +207,7 @@ modules:
 
 ---
 
-## Phase 7 — Memory Upgrade `[IN PROGRESS]`
+## Phase 7 — Memory Upgrade `[COMPLETE]`
 
 Upgrade Nova from a session-only memory to a persistent long-term memory system.
 Nova now remembers facts about you across sessions and maintains summaries of past conversations.
