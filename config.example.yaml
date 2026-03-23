@@ -8,6 +8,8 @@ brain:
 memory:
   db_path: data/memory.db
   max_context_messages: 20  # How many messages to keep in context window
+  long_term_enabled: true   # Persist facts and session summaries across restarts
+  semantic_search: false    # Set true + ollama pull nomic-embed-text to enable ChromaDB
 
 voice:
   enabled: false
