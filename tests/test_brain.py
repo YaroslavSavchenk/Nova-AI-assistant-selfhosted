@@ -9,6 +9,7 @@ import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.brain import Brain, LLMResponse, OllamaProvider
+from core.long_term_memory import LongTermMemory
 from core.memory import Memory
 from core.tool_router import ToolRouter
 from modules.base import NovaModule
@@ -204,3 +205,159 @@ async def test_tool_not_found_passes_error_to_llm(memory, router):
     second_call_messages = captured_messages[1]
     tool_messages = [m for m in second_call_messages if m.get("role") == "tool"]
     assert any("Tool not found: ghost" in m["content"] for m in tool_messages)
+
+
+# ---------------------------------------------------------------------------
+# Long-term memory integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def ltm(tmp_path):
+    """Initialised LongTermMemory for Brain integration tests."""
+    db = LongTermMemory(db_path=str(tmp_path / "brain_ltm_test.db"), semantic_search=False)
+    await db.init()
+    return db
+
+
+def make_brain_with_ltm(memory, router, ltm):
+    return Brain(
+        config=make_config(),
+        memory=memory,
+        tool_router=router,
+        system_prompt="You are Nova.",
+        long_term_memory=ltm,
+    )
+
+
+@pytest.mark.asyncio
+async def test_augmented_prompt_without_ltm(memory, router):
+    """When LTM is None, _build_augmented_prompt returns the original prompt unchanged."""
+    brain = make_brain(memory, router)
+    brain._system_prompt = "Base prompt."
+    result = await brain._build_augmented_prompt("hello")
+    assert result == "Base prompt."
+
+
+@pytest.mark.asyncio
+async def test_augmented_prompt_injects_facts(memory, router, ltm):
+    """When LTM has facts, they appear in the augmented system prompt."""
+    await ltm.add_fact("I prefer dark mode")
+    await ltm.add_fact("I work in Python")
+
+    brain = make_brain_with_ltm(memory, router, ltm)
+    brain._system_prompt = "Base prompt."
+    result = await brain._build_augmented_prompt("hello")
+
+    assert "I prefer dark mode" in result
+    assert "I work in Python" in result
+    assert "Base prompt." in result
+
+
+@pytest.mark.asyncio
+async def test_augmented_prompt_injects_summaries(memory, router, ltm):
+    """When LTM has summaries, they appear in the augmented system prompt."""
+    await ltm.add_summary("sess-old", "We discussed Docker setup.", 6)
+
+    brain = make_brain_with_ltm(memory, router, ltm)
+    brain._system_prompt = "Base prompt."
+    result = await brain._build_augmented_prompt("hello")
+
+    assert "We discussed Docker setup." in result
+
+
+@pytest.mark.asyncio
+async def test_augmented_prompt_base_returned_when_ltm_empty(memory, router, ltm):
+    """When LTM is enabled but empty, original prompt is returned unchanged."""
+    brain = make_brain_with_ltm(memory, router, ltm)
+    brain._system_prompt = "Base prompt."
+    result = await brain._build_augmented_prompt("hello")
+    assert result == "Base prompt."
+
+
+@pytest.mark.asyncio
+async def test_chat_uses_augmented_prompt(memory, router, ltm):
+    """brain.chat() injects facts into the system message sent to the LLM."""
+    await ltm.add_fact("My name is Sava")
+    brain = make_brain_with_ltm(memory, router, ltm)
+
+    captured_messages = []
+
+    async def mock_chat(messages, tools=None, thinking=False):
+        captured_messages.append(messages[:])
+        return LLMResponse(content="Hello Sava!", tool_calls=None)
+
+    brain._provider.chat = mock_chat
+
+    await brain.chat("Hi", session_id="ltm-test")
+
+    system_message = captured_messages[0][0]
+    assert system_message["role"] == "system"
+    assert "My name is Sava" in system_message["content"]
+
+
+# ---------------------------------------------------------------------------
+# _parse_summary_response tests
+# ---------------------------------------------------------------------------
+
+
+def make_parser_brain():
+    """Minimal Brain instance for testing _parse_summary_response only."""
+    config = make_config()
+    mem = MagicMock()
+    router = ToolRouter()
+    brain = Brain(
+        config=config,
+        memory=mem,
+        tool_router=router,
+        system_prompt="",
+    )
+    return brain
+
+
+def test_parse_summary_valid_json():
+    brain = make_parser_brain()
+    raw = '{"summary": "We talked about Python.", "facts": ["User likes Python"]}'
+    summary, facts = brain._parse_summary_response(raw, "sess-1")
+    assert summary == "We talked about Python."
+    assert facts == ["User likes Python"]
+
+
+def test_parse_summary_valid_json_no_facts():
+    brain = make_parser_brain()
+    raw = '{"summary": "Just a chat.", "facts": []}'
+    summary, facts = brain._parse_summary_response(raw, "sess-2")
+    assert summary == "Just a chat."
+    assert facts == []
+
+
+def test_parse_summary_json_with_surrounding_text():
+    brain = make_parser_brain()
+    raw = 'Here is the result: {"summary": "Discussed music.", "facts": ["User likes jazz"]} — end'
+    summary, facts = brain._parse_summary_response(raw, "sess-3")
+    assert summary == "Discussed music."
+    assert "User likes jazz" in facts
+
+
+def test_parse_summary_malformed_json_regex_fallback():
+    brain = make_parser_brain()
+    # Broken JSON — mismatched quotes but summary key is readable
+    raw = '{"summary": "Talked about Docker.", "facts": ["User runs Linux"]'
+    summary, facts = brain._parse_summary_response(raw, "sess-4")
+    # Should extract summary via regex fallback
+    assert "Docker" in summary or "Talked" in summary
+
+
+def test_parse_summary_no_json_raw_fallback():
+    brain = make_parser_brain()
+    raw = "The user asked about Spotify. Nothing else notable."
+    summary, facts = brain._parse_summary_response(raw, "sess-5")
+    assert "Spotify" in summary
+    assert isinstance(facts, list)
+
+
+def test_parse_summary_empty_string_uses_session_id():
+    brain = make_parser_brain()
+    summary, facts = brain._parse_summary_response("", "sess-fallback")
+    assert "sess-fallback" in summary
+    assert isinstance(facts, list)
