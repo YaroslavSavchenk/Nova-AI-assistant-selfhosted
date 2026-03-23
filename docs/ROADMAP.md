@@ -307,3 +307,11 @@ These are not scheduled but worth keeping track of:
 | `config.yaml` + `.env` split | Non-secret settings (model choice, toggles) in YAML; secrets always in env |
 | Async everywhere | LLM calls, audio, and API calls all benefit from non-blocking I/O |
 | Qwen 3 14B Q5_K_M | Best quality/VRAM tradeoff for RTX 5070; Q5_K_M is near-lossless for 14B |
+
+---
+
+- **API Server Layer** — Expose Nova core as a FastAPI + WebSocket backend so external clients (phone, desktop, browser) can connect. Endpoints: `POST /chat`, `POST /voice`, `WS /stream`, `GET /status`, `GET /history/{session_id}`, `GET /modules`. Token-based auth even on local network. Terminal REPL stays unchanged — API runs alongside it via `python main.py --server`. This is the critical foundation for every frontend below.
+- **Phone App** — Mobile client (React Native, Flutter, or PWA) that connects to the Nova API server over local WiFi or Tailscale for remote access. Chat interface with voice button, now-playing widget, quick actions for todos/calendar/music. Push notifications for reminders and proactive alerts.
+- **Desktop App** — Native desktop frontend (Electron or Tauri). System tray icon, global hotkey (e.g. Alt+Space) to summon Nova as a floating overlay from anywhere. Persistent chat window optional. Connects to the same API server as the phone app.
+- **Browser UI** — Lightweight web interface (FastAPI + HTMX or simple React) served directly by the API server on localhost. Zero-install alternative to the desktop app for quick access.
+- **Smart LLM Routing** — Extend provider abstraction with routing logic in `brain.py`. Simple requests stay on local Qwen, complex multi-step tool chains route to Claude API. Cost tracking per request. Fully optional — Nova must always work 100% offline with just Qwen.
