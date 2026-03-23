@@ -20,10 +20,11 @@ logger = logging.getLogger(__name__)
 
 _CREATE_FACTS_TABLE = """
 CREATE TABLE IF NOT EXISTS facts (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    content     TEXT    NOT NULL,
-    category    TEXT    NOT NULL DEFAULT 'general',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    content         TEXT    NOT NULL,
+    category        TEXT    NOT NULL DEFAULT 'general',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_referenced DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 """
 
@@ -40,8 +41,8 @@ CREATE TABLE IF NOT EXISTS session_summaries (
 # Minimum messages a session must have before it's worth summarizing
 _MIN_MESSAGES_TO_SUMMARIZE = 4
 
-# Maximum facts to inject into the system prompt
-_MAX_FACTS_IN_PROMPT = 20
+# Maximum facts to inject into the system prompt (sorted by most recently referenced)
+_MAX_FACTS_IN_PROMPT = 50
 
 # Number of recent summaries to inject when semantic search is disabled
 _RECENT_SUMMARIES_COUNT = 3
@@ -123,22 +124,32 @@ class LongTermMemory:
             return cursor.lastrowid
 
     async def list_facts(self, category: str | None = None) -> list[dict]:
-        """Return all facts, optionally filtered by category."""
+        """Return all facts, optionally filtered by category, most recently referenced first."""
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row
             if category:
                 async with db.execute(
-                    "SELECT id, content, category, created_at FROM facts "
-                    "WHERE category = ? ORDER BY id ASC",
+                    "SELECT id, content, category, created_at, last_referenced FROM facts "
+                    "WHERE category = ? ORDER BY last_referenced DESC",
                     (category,),
                 ) as cursor:
                     rows = await cursor.fetchall()
             else:
                 async with db.execute(
-                    "SELECT id, content, category, created_at FROM facts ORDER BY id ASC"
+                    "SELECT id, content, category, created_at, last_referenced FROM facts "
+                    "ORDER BY last_referenced DESC"
                 ) as cursor:
                     rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    async def touch_fact(self, fact_id: int) -> None:
+        """Update last_referenced timestamp for a fact (call when a fact is used in a prompt)."""
+        async with aiosqlite.connect(self._db_path) as db:
+            await db.execute(
+                "UPDATE facts SET last_referenced = CURRENT_TIMESTAMP WHERE id = ?",
+                (fact_id,),
+            )
+            await db.commit()
 
     async def delete_fact(self, fact_id: int) -> bool:
         """Delete a fact by ID. Returns True if a row was deleted."""
@@ -150,19 +161,19 @@ class LongTermMemory:
     async def get_facts_for_prompt(self) -> str:
         """
         Return a formatted string of facts for injection into the system prompt.
+        Facts are ordered by last_referenced (most recently used first).
         Returns empty string if no facts exist.
         """
         facts = await self.list_facts()
         if not facts:
             return ""
 
-        lines = []
-        for fact in facts[:_MAX_FACTS_IN_PROMPT]:
-            lines.append(f"- {fact['content']}")
+        shown = facts[:_MAX_FACTS_IN_PROMPT]
+        lines = [f"- {f['content']}" for f in shown]
 
         overflow = len(facts) - _MAX_FACTS_IN_PROMPT
         if overflow > 0:
-            lines.append(f"...and {overflow} more (use list_facts to see all)")
+            lines.append(f"...and {overflow} older facts (use list_facts to see all)")
 
         return "\n".join(lines)
 
