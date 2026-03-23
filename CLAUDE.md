@@ -28,17 +28,24 @@ nova/
 ├── config.yaml              # API keys, model settings, module toggles
 ├── core/
 │   ├── brain.py             # LLM client wrapper, tool-calling loop
-│   ├── memory.py            # SQLite-backed conversation + fact memory
+│   ├── memory.py            # SQLite-backed conversation history
+│   ├── long_term_memory.py  # Persistent facts + session summaries (Phase 7)
 │   ├── tool_router.py       # Registers modules, matches LLM tool calls to handlers
 │   └── config_loader.py     # Loads and validates config.yaml
 ├── voice/
 │   ├── listener.py          # STT (Speech-to-Text) via Faster-Whisper (local, CPU)
-│   └── speaker.py           # TTS (Text-to-Speech) via edge-tts (no API key)
+│   ├── speaker.py           # TTS (Text-to-Speech) via edge-tts (no API key)
+│   └── wake_word.py         # Wake word detection via Whisper tiny model
 ├── modules/                 # Each file/package = one tool Nova can use
 │   ├── base.py              # Abstract base class all modules implement
 │   ├── web_search.py
 │   ├── system_monitor.py
 │   ├── todo_reminders.py
+│   ├── memory/              # Long-term memory tools (Phase 7)
+│   │   ├── __init__.py      # Re-exports RememberFactModule, RecallFactsModule, ForgetFactModule
+│   │   ├── remember.py      # RememberFactModule
+│   │   ├── recall.py        # RecallFactsModule
+│   │   └── forget.py        # ForgetFactModule
 │   ├── research/            # News, Wikipedia, URL summarization
 │   │   ├── __init__.py      # Re-exports NewsModule, WikipediaModule, SummarizeUrlModule
 │   │   ├── news.py          # NewsModule
@@ -60,11 +67,15 @@ nova/
 │       ├── queue.py         # SpotifyQueueModule, SpotifyViewQueueModule
 │       ├── playlists.py     # SpotifyMyPlaylistsModule
 │       └── lyrics_search.py # SpotifyLyricsSearchModule (Genius API)
+├── scripts/
+│   ├── spotify_auth.py      # One-time Spotify OAuth token setup
+│   └── google_auth.py       # Google Calendar service account connection test
 ├── data/
 │   └── memory.db            # SQLite database (gitignored)
 └── tests/
     ├── test_brain.py
     ├── test_memory.py
+    ├── test_long_term_memory.py
     └── test_modules/
 ```
 
@@ -109,7 +120,7 @@ class LLMProvider(ABC):
     async def chat(self, messages, tools=None, thinking=False) -> LLMResponse
     
 class OllamaProvider(LLMProvider):  # Current default
-class ClaudeProvider(LLMProvider):  # Future expansion
+class ClaudeProvider(LLMProvider):  # Phase 8 — not yet implemented
 ```
 
 System prompt for Nova's personality lives in `core/prompts/system.md`. Edit personality there, not in `brain.py`.

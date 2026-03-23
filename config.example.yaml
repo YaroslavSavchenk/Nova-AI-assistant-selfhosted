@@ -19,10 +19,7 @@ voice:
     device: cpu             # "cpu" recommended to save VRAM for the LLM
     silence_seconds: 5.0    # Seconds of silence before Nova stops listening and responds
   tts:
-    model: tts_models/multilingual/multi-dataset/xtts_v2
-    speaker_wav: null       # Path to reference audio for voice cloning, or null for default
-    language: en
-    device: cpu
+    language: en            # "en", "nl", "ru" — selects the edge-tts neural voice
   wake_word:
     enabled: true                    # Say "Hey Nova" or just "Nova" to trigger
 
