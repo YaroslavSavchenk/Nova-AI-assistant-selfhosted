@@ -1,8 +1,7 @@
 """
-Tests for modules/research.py — NewsModule, WikipediaModule, SummarizeUrlModule.
+Tests for the research package — NewsModule, WikipediaModule, SummarizeUrlModule.
 """
 
-import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -35,10 +34,7 @@ def url_module():
 
 
 def _fake_feed(n: int = 3):
-    """Build a fake feedparser result with n entries.
-
-    feedparser entries support dict-style .get() access, so use plain dicts here.
-    """
+    """Build a fake feedparser result with n entries."""
     feed = MagicMock()
     feed.entries = [
         {
@@ -81,7 +77,7 @@ def _mock_httpx_client(response):
 
 async def test_news_returns_headlines(news_module):
     fake_feed = _fake_feed(3)
-    with patch("modules.research.feedparser.parse", return_value=fake_feed):
+    with patch("modules.research.news.feedparser.parse", return_value=fake_feed):
         result = await news_module.run(topic="Python")
 
     assert "Python" in result
@@ -101,20 +97,18 @@ async def test_news_strips_source_from_title(news_module):
             "link": "https://example.com",
         }
     ]
-    with patch("modules.research.feedparser.parse", return_value=feed):
+    with patch("modules.research.news.feedparser.parse", return_value=feed):
         result = await news_module.run(topic="test")
 
     assert "Big Story Today" in result
-    # The " - Reuters" suffix should not appear as a duplicate
-    assert result.count("Reuters") <= 2  # may appear in Source line, not title
+    assert result.count("Reuters") <= 2
 
 
 async def test_news_max_articles_capped_at_10(news_module):
     fake_feed = _fake_feed(15)
-    with patch("modules.research.feedparser.parse", return_value=fake_feed):
+    with patch("modules.research.news.feedparser.parse", return_value=fake_feed):
         result = await news_module.run(topic="AI", max_articles=99)
 
-    # Should only show 10 entries max
     assert result.count("https://news.example.com/article/") == 10
 
 
@@ -126,14 +120,14 @@ async def test_news_empty_topic_returns_error(news_module):
 async def test_news_no_entries_returns_friendly_message(news_module):
     empty_feed = MagicMock()
     empty_feed.entries = []
-    with patch("modules.research.feedparser.parse", return_value=empty_feed):
+    with patch("modules.research.news.feedparser.parse", return_value=empty_feed):
         result = await news_module.run(topic="obscuretopicxyz")
 
     assert "No recent news found" in result
 
 
 async def test_news_exception_returns_error_string(news_module):
-    with patch("modules.research.feedparser.parse", side_effect=RuntimeError("timeout")):
+    with patch("modules.research.news.feedparser.parse", side_effect=RuntimeError("timeout")):
         result = await news_module.run(topic="AI")
 
     assert "Failed to fetch news" in result
@@ -153,7 +147,7 @@ async def test_wiki_returns_summary(wiki_module):
     }
     mock_ctx = _mock_httpx_client(_mock_httpx_response(200, json_data=fake_data))
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.wikipedia.httpx.AsyncClient", return_value=mock_ctx):
         result = await wiki_module.run(query="Python programming language")
 
     assert "Python (programming language)" in result
@@ -165,7 +159,7 @@ async def test_wiki_404_returns_not_found(wiki_module):
     mock_resp = _mock_httpx_response(status_code=404)
     mock_ctx = _mock_httpx_client(mock_resp)
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.wikipedia.httpx.AsyncClient", return_value=mock_ctx):
         result = await wiki_module.run(query="ThisTopicDoesNotExistXYZ")
 
     assert "No Wikipedia article found" in result
@@ -177,12 +171,11 @@ async def test_wiki_empty_query_returns_error(wiki_module):
 
 
 async def test_wiki_exception_returns_error_string(wiki_module):
-    import httpx
     mock_ctx = MagicMock()
     mock_ctx.__aenter__ = AsyncMock(side_effect=RuntimeError("network down"))
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.wikipedia.httpx.AsyncClient", return_value=mock_ctx):
         result = await wiki_module.run(query="Python")
 
     assert "Wikipedia lookup failed" in result
@@ -212,12 +205,11 @@ async def test_summarize_url_extracts_article_content(url_module):
     mock_resp = _mock_httpx_response(200, text=_SAMPLE_HTML, content_type="text/html; charset=utf-8")
     mock_ctx = _mock_httpx_client(mock_resp)
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.summarize.httpx.AsyncClient", return_value=mock_ctx):
         result = await url_module.run(url="https://example.com/article")
 
     assert "Article Title" in result
     assert "main content of the article" in result
-    # Nav and footer should be stripped
     assert "Skip nav" not in result
     assert "Footer text" not in result
 
@@ -227,11 +219,10 @@ async def test_summarize_url_truncates_long_content(url_module):
     mock_resp = _mock_httpx_response(200, text=long_html, content_type="text/html")
     mock_ctx = _mock_httpx_client(mock_resp)
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.summarize.httpx.AsyncClient", return_value=mock_ctx):
         result = await url_module.run(url="https://example.com/long")
 
     assert "truncated" in result
-    # Total output should be bounded (4000 chars of content + overhead)
     assert len(result) < 6000
 
 
@@ -249,7 +240,7 @@ async def test_summarize_url_non_html_content_type(url_module):
     mock_resp = _mock_httpx_response(200, text="raw text", content_type="application/pdf")
     mock_ctx = _mock_httpx_client(mock_resp)
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.summarize.httpx.AsyncClient", return_value=mock_ctx):
         result = await url_module.run(url="https://example.com/file.pdf")
 
     assert "non-HTML" in result or "Cannot" in result
@@ -265,7 +256,7 @@ async def test_summarize_url_http_error_returns_error_string(url_module):
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_client)
     mock_ctx.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("modules.research.httpx.AsyncClient", return_value=mock_ctx):
+    with patch("modules.research.summarize.httpx.AsyncClient", return_value=mock_ctx):
         result = await url_module.run(url="https://down.example.com")
 
     assert "Network error" in result or "Failed" in result

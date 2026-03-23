@@ -32,15 +32,25 @@ nova/
 │   ├── tool_router.py       # Registers modules, matches LLM tool calls to handlers
 │   └── config_loader.py     # Loads and validates config.yaml
 ├── voice/
-│   ├── listener.py          # STT (Speech-to-Text) via Whisper API
-│   └── speaker.py           # TTS (Text-to-Speech) via ElevenLabs/Piper
+│   ├── listener.py          # STT (Speech-to-Text) via Faster-Whisper (local, CPU)
+│   └── speaker.py           # TTS (Text-to-Speech) via edge-tts (no API key)
 ├── modules/                 # Each file/package = one tool Nova can use
 │   ├── base.py              # Abstract base class all modules implement
 │   ├── web_search.py
 │   ├── system_monitor.py
 │   ├── todo_reminders.py
-│   ├── research.py
-│   └── spotify/             # Spotify package (split from spotify.py)
+│   ├── research/            # News, Wikipedia, URL summarization
+│   │   ├── __init__.py      # Re-exports NewsModule, WikipediaModule, SummarizeUrlModule
+│   │   ├── news.py          # NewsModule
+│   │   ├── wikipedia.py     # WikipediaModule
+│   │   └── summarize.py     # SummarizeUrlModule
+│   ├── calendar/            # Google Calendar (service account auth)
+│   │   ├── __init__.py      # Re-exports all calendar modules
+│   │   ├── _client.py       # Shared build_service() helper
+│   │   ├── list_events.py   # CalendarListEventsModule
+│   │   ├── create_event.py  # CalendarCreateEventModule
+│   │   └── delete_event.py  # CalendarDeleteEventModule
+│   └── spotify/             # Spotify package
 │       ├── __init__.py      # Re-exports all public module classes
 │       ├── _client.py       # Shared spotipy client + device helpers
 │       ├── _helpers.py      # Shared formatting/parsing helpers
@@ -72,7 +82,7 @@ class MyModule(NovaModule):
         # Execute the tool, return result as string for LLM
 ```
 
-Register new modules in `core/tool_router.py` by adding to `ENABLED_MODULES` list. The router auto-converts modules into LLM tool definitions.
+Register new modules in `main.py` by instantiating and passing them to `tool_router.register()`. The router auto-converts modules into LLM tool definitions.
 
 ## Critical Rules
 

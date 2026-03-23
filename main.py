@@ -14,6 +14,7 @@ import logging
 import os
 import sys
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # WSL2: PulseAudio is served by WSLg — point sounddevice/portaudio at it
@@ -35,8 +36,9 @@ from modules.base import NovaModule
 from modules.web_search import WebSearchModule
 from modules.system_monitor import SystemMonitorModule
 from modules.todo_reminders import TodoModule
-from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule
+from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule  # noqa: F401 (re-exported from package)
 from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
+from modules.calendar import CalendarListEventsModule, CalendarCreateEventModule, CalendarDeleteEventModule
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +228,7 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
         logging.getLogger("faster_whisper").setLevel(logging.ERROR)
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
         logging.getLogger("voice.wake_word").setLevel(logging.WARNING)
+        logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
 
 async def main() -> None:
@@ -247,9 +250,20 @@ async def main() -> None:
     logger = logging.getLogger(__name__)
     logger.debug("Config loaded. Session: %s", session_id)
 
-    # Load system prompt
+    # Load system prompt and inject today's date + full week map
     prompt_path = Path(__file__).parent / "core" / "prompts" / "system.md"
     system_prompt = prompt_path.read_text(encoding="utf-8")
+    _now = datetime.now()
+    _monday = _now - timedelta(days=_now.weekday())
+    _week_map = ", ".join(
+        (_monday + timedelta(days=i)).strftime("%a %d %b")
+        for i in range(7)
+    )
+    _today_str = _now.strftime("%A %d %B %Y")
+    system_prompt = (
+        f"Today is {_today_str}. "
+        f"This week: {_week_map}.\n\n"
+    ) + system_prompt
 
     # Initialise components
     memory = Memory(db_path=config["memory"]["db_path"])
@@ -280,6 +294,14 @@ async def main() -> None:
         tool_router.register(WikipediaModule())
         tool_router.register(SummarizeUrlModule())
         logger.debug("Registered module: research (news_headlines, wikipedia_lookup, summarize_url)")
+
+    if modules_cfg.get("calendar", False):
+        cal_id = modules_cfg.get("calendar_id", "")
+        cal_tz = modules_cfg.get("calendar_timezone", "UTC")
+        tool_router.register(CalendarListEventsModule(calendar_id=cal_id, timezone=cal_tz))
+        tool_router.register(CalendarCreateEventModule(calendar_id=cal_id, timezone=cal_tz))
+        tool_router.register(CalendarDeleteEventModule(calendar_id=cal_id, timezone=cal_tz))
+        logger.debug("Registered module: calendar (calendar_list_events, calendar_create_event, calendar_delete_event)")
 
     if modules_cfg.get("spotify", False):
         tool_router.register(SpotifyPlayModule())

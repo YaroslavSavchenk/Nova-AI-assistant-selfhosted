@@ -8,7 +8,7 @@ import logging
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # ThreadPoolExecutor for running blocking calls
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="listener")
@@ -60,7 +60,7 @@ class Listener:
                 compute_type="int8",
             )
         except Exception as exc:
-            log.warning("Failed to load Faster-Whisper model: %s", exc)
+            logger.warning("Failed to load Faster-Whisper model: %s", exc)
             self._model = None
 
     def _transcribe_sync(self, audio_path: str) -> str:
@@ -76,7 +76,7 @@ class Listener:
             )
             return " ".join(seg.text.strip() for seg in segments)
         except Exception as exc:
-            log.warning("Transcription error for '%s': %s", audio_path, exc)
+            logger.warning("Transcription error for '%s': %s", audio_path, exc)
             return ""
 
     def _record_sync(self, duration: float, sample_rate: int) -> "numpy.ndarray":  # noqa: F821
@@ -85,7 +85,7 @@ class Listener:
         import sounddevice as sd  # noqa: PLC0415
 
         frames = int(duration * sample_rate)
-        log.debug("Recording %.1f s at %d Hz …", duration, sample_rate)
+        logger.debug("Recording %.1f s at %d Hz …", duration, sample_rate)
         audio = sd.rec(frames, samplerate=sample_rate, channels=1, dtype="float32")
         sd.wait()
         return np.squeeze(audio)
@@ -136,7 +136,7 @@ class Listener:
         silence_frames = 0
 
         with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16", blocksize=frame_size) as stream:
-            log.debug("VAD recording started (silence threshold=%.1f s)…", silence_seconds)
+            logger.debug("VAD recording started (silence threshold=%.1f s)…", silence_seconds)
             for _ in range(max_frames):
                 chunk, _ = stream.read(frame_size)
                 chunk = np.squeeze(chunk)
@@ -194,7 +194,7 @@ class Listener:
                 max_duration,
             )
         except Exception as exc:
-            log.warning("VAD recording failed: %s", exc)
+            logger.warning("VAD recording failed: %s", exc)
             return ""
 
         if audio_data.size == 0:
@@ -213,7 +213,7 @@ class Listener:
 
             result = await loop.run_in_executor(_executor, _write_and_transcribe)
         except Exception as exc:
-            log.warning("Failed to save or transcribe VAD audio: %s", exc)
+            logger.warning("Failed to save or transcribe VAD audio: %s", exc)
             result = ""
         finally:
             try:
@@ -248,7 +248,7 @@ class Listener:
                 sample_rate,
             )
         except Exception as exc:
-            log.warning("Microphone recording failed: %s", exc)
+            logger.warning("Microphone recording failed: %s", exc)
             return ""
 
         # Write to a temporary WAV file, transcribe, then clean up
@@ -264,7 +264,7 @@ class Listener:
 
             result = await loop.run_in_executor(_executor, _write_and_transcribe)
         except Exception as exc:
-            log.warning("Failed to save or transcribe audio: %s", exc)
+            logger.warning("Failed to save or transcribe audio: %s", exc)
             result = ""
         finally:
             # Best-effort cleanup — ignore errors if file was never created

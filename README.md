@@ -147,7 +147,14 @@ nova/
 │   ├── web_search.py        # DuckDuckGo search
 │   ├── system_monitor.py    # CPU/RAM/GPU stats
 │   ├── todo_reminders.py    # Persistent todos & scheduled reminders
-│   ├── research.py          # Multi-source research, news, Wikipedia, URL summarization
+│   ├── research/            # News headlines, Wikipedia lookup, URL summarization
+│   │   ├── news.py          # NewsModule
+│   │   ├── wikipedia.py     # WikipediaModule
+│   │   └── summarize.py     # SummarizeUrlModule
+│   ├── calendar/            # Google Calendar (list, create, delete — service account auth)
+│   │   ├── list_events.py   # CalendarListEventsModule
+│   │   ├── create_event.py  # CalendarCreateEventModule
+│   │   └── delete_event.py  # CalendarDeleteEventModule
 │   └── spotify/             # Spotify playback control (play, queue, lyrics search)
 │       ├── __init__.py      # Re-exports all public module classes
 │       ├── play.py          # SpotifyPlayModule
@@ -180,6 +187,7 @@ Nova's capabilities are modular. Each module is a self-contained tool that the L
 | **Research** | Multi-source search, news headlines, Wikipedia lookups, URL summarization | `httpx`, `feedparser` |
 | **Spotify** | Play music, control playback, skip to track, view queue, manage playlists | `spotipy`, Spotify API key |
 | **Spotify lyrics search** | Identify a song from a lyric snippet and confirm before playing | `httpx`, Genius API key |
+| **Google Calendar** | List, create, and delete calendar events with confirmation flow | `google-auth`, `google-api-python-client`, service account |
 
 ### Roadmap
 
@@ -188,7 +196,7 @@ Nova's capabilities are modular. Each module is a self-contained tool that the L
 | 3 | News & research | Complete |
 | 4 | Spotify integration | Complete |
 | 5 | Spotify lyrics search (Genius API) | Complete |
-| 6 | Google Calendar | Planned |
+| 6 | Google Calendar | Complete |
 | 7 | Memory upgrade (semantic search, ChromaDB) | Planned |
 | 8 | Provider abstraction (Claude / OpenAI fallback) | Planned |
 
@@ -240,7 +248,7 @@ Nova uses a split config strategy:
 
 ## Voice pipeline
 
-All voice processing runs locally on GPU:
+All voice processing runs locally on CPU, preserving VRAM for the LLM:
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|

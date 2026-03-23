@@ -192,10 +192,10 @@ class Brain:
                 for tc in response.tool_calls:
                     tool_name = tc["name"]
                     tool_args = tc.get("arguments", {})
-                    logger.debug("Tool call: %s(%s)", tool_name, tool_args)
+                    logger.info("[tool] → %s(%s)", tool_name, tool_args)
 
                     result = await self._tool_router.dispatch(tool_name, tool_args)
-                    logger.debug("Tool result: %s", result)
+                    logger.info("[tool] ← %s: %s", tool_name, result)
 
                     # Add assistant tool-call turn and tool result to in-memory
                     # message list (not persisted — tool turns are transient)

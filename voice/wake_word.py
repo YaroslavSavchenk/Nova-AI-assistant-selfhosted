@@ -11,7 +11,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="wake_word")
 
@@ -59,7 +59,7 @@ class WakeWordDetector:
             print("Say 'Hey Nova' to activate.")
             return True
         except Exception as exc:
-            log.warning("Failed to load Whisper for wake word detection: %s", exc)
+            logger.warning("Failed to load Whisper for wake word detection: %s", exc)
             return False
 
     def _contains_wake_phrase(self, text: str) -> bool:
@@ -74,7 +74,8 @@ class WakeWordDetector:
         """
         import numpy as np  # noqa: PLC0415
         import sounddevice as sd  # noqa: PLC0415
-        import tempfile, os  # noqa: PLC0415, E401
+        import tempfile  # noqa: PLC0415
+        import os  # noqa: PLC0415
         import soundfile as sf  # noqa: PLC0415
 
         audio = sd.rec(_CHUNK_SIZE, samplerate=_SAMPLE_RATE, channels=1, dtype="float32")
@@ -95,10 +96,10 @@ class WakeWordDetector:
             )
             text = " ".join(seg.text.strip() for seg in segments)
             if text:
-                log.debug("Wake word check: '%s'", text)
+                logger.debug("Wake word check: '%s'", text)
             return self._contains_wake_phrase(text)
         except Exception as exc:
-            log.debug("Wake word transcription error: %s", exc)
+            logger.debug("Wake word transcription error: %s", exc)
             return False
         finally:
             if tmp_path:
@@ -123,7 +124,7 @@ class WakeWordDetector:
         loop = asyncio.get_event_loop()
 
         if not self._load_whisper():
-            log.warning("Wake word detection disabled — falling back to push-to-talk.")
+            logger.warning("Wake word detection disabled — falling back to push-to-talk.")
             await stop_event.wait()
             return
 
@@ -131,12 +132,12 @@ class WakeWordDetector:
             try:
                 detected = await loop.run_in_executor(_executor, self._record_and_check)
             except Exception as exc:
-                log.warning("Wake word loop error: %s", exc)
+                logger.warning("Wake word loop error: %s", exc)
                 continue
 
             if detected:
-                log.info("Wake word detected — activating Nova.")
+                logger.info("Wake word detected — activating Nova.")
                 try:
                     await callback()
                 except Exception as exc:
-                    log.warning("Wake word callback error: %s", exc)
+                    logger.warning("Wake word callback error: %s", exc)

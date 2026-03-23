@@ -30,6 +30,9 @@ modules:
   todo_reminders: true
   research: true
   spotify: true
+  calendar: true
+  calendar_id: "your.email@gmail.com"   # Your Google Calendar email
+  calendar_timezone: "Europe/Amsterdam" # IANA timezone for new events
 
 logging:
   level: INFO

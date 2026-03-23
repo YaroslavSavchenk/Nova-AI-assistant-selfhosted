@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 5 complete — starting Phase 6 (Google Calendar)
+## Current status: Phase 6 complete — starting Phase 7 (Memory Upgrade)
 
 ---
 
@@ -84,7 +84,7 @@ Add the voice interface. This is where Nova goes from chatbot to assistant.
 
 Give Nova better research capabilities beyond a single web search.
 
-**Module:** `modules/research.py`
+**Module:** `modules/research/` package (`news.py`, `wikipedia.py`, `summarize.py`)
 
 **Capabilities:**
 - Multi-source web search with summarization
@@ -170,18 +170,38 @@ Find songs from lyric snippets and confirm before playing.
 
 ---
 
-## Phase 6 — Google Calendar `[PLANNED]`
+## Phase 6 — Google Calendar `[COMPLETE]`
 
-Google Calendar integration via OAuth 2.0.
+Google Calendar integration via service account authentication.
 
-**Module:** `modules/calendar_tool.py`
+**Module:** `modules/calendar/` package (`list_events.py`, `create_event.py`, `delete_event.py`)
+
+**Tools registered:**
+
+| Tool | Description |
+|------|-------------|
+| `calendar_list_events` | List upcoming events (configurable days ahead, max results) |
+| `calendar_create_event` | Create event with title, start, end, optional description — confirms with user first |
+| `calendar_delete_event` | Delete event by ID — confirms with user first |
 
 **Capabilities:**
 - Read upcoming events (today, this week, or by date range)
-- Create calendar events
-- Delete calendar events
+- Create calendar events with natural language date resolution
+- Delete calendar events by ID
+- Confirmation flow — Nova always asks before creating or deleting
 
-**Config needed:** Google OAuth credentials (`credentials.json`, stored securely outside the repo)
+**Auth:** Google service account (`data/service.account.json`) — no browser flow needed.
+The service account must be shared with your calendar (Make changes to events permission).
+
+**Config needed in `config.yaml`:**
+```yaml
+modules:
+  calendar: true
+  calendar_id: "your.email@gmail.com"
+  calendar_timezone: "Europe/Amsterdam"
+```
+
+**Setup:** Run `python3 scripts/google_auth.py` to verify credentials are working.
 
 **Note:** Email (Gmail) intentionally excluded — deferred to backlog.
 
