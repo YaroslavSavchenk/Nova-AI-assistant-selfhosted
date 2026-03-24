@@ -236,7 +236,7 @@ class Brain:
             logger.debug("No sessions need summarizing.")
             return
 
-        logger.info("Summarizing %d old session(s) in background...", len(pending))
+        logger.debug("Summarizing %d old session(s) in background...", len(pending))
 
         for session_id, messages in pending:
             await self._summarize_session(session_id, messages)
@@ -259,7 +259,7 @@ class Brain:
             summary, facts = self._parse_summary_response(raw, session_id)
 
             await self._ltm.add_summary(session_id, summary, len(messages))
-            logger.info("Summarized session %s: %s", session_id, summary[:80])
+            logger.debug("Summarized session %s: %s", session_id, summary[:80])
 
             for fact in facts:
                 if fact.strip():
@@ -299,7 +299,7 @@ class Brain:
         else:
             # Last resort: use the raw text truncated as the summary
             summary = raw[:300].strip() or f"Conversation session {session_id}"
-            logger.warning(
+            logger.debug(
                 "Could not parse summary JSON for session %s — using raw text fallback",
                 session_id,
             )
@@ -362,10 +362,10 @@ class Brain:
                 for tc in response.tool_calls:
                     tool_name = tc["name"]
                     tool_args = tc.get("arguments", {})
-                    logger.info("[tool] → %s(%s)", tool_name, tool_args)
+                    logger.debug("[tool] → %s(%s)", tool_name, tool_args)
 
                     result = await self._tool_router.dispatch(tool_name, tool_args)
-                    logger.info("[tool] ← %s: %s", tool_name, result)
+                    logger.debug("[tool] ← %s: %s", tool_name, result)
 
                     # Add assistant tool-call turn and tool result to in-memory
                     # message list (not persisted — tool turns are transient)

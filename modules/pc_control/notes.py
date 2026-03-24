@@ -6,6 +6,7 @@ import os
 import re
 
 from modules.base import NovaModule
+from modules.pc_control._safety import resolve_project
 
 logger = logging.getLogger(__name__)
 
@@ -47,21 +48,22 @@ class ProjectNotesReadModule(NovaModule):
             if not project:
                 return "Error: project name is required."
 
-            if project not in self.projects:
+            resolved_key, project_info = resolve_project(project, self.projects)
+            if not resolved_key:
                 available = ", ".join(self.projects.keys()) if self.projects else "none"
                 return f"Error: unknown project '{project}'. Available projects: {available}"
 
-            safe_name = _sanitize_project_name(project)
+            safe_name = _sanitize_project_name(resolved_key)
             if not safe_name:
-                return f"Error: invalid project name '{project}'. Use only alphanumeric, hyphens, and underscores."
+                return f"Error: invalid project name '{resolved_key}'. Use only alphanumeric, hyphens, and underscores."
 
             notes_path = os.path.join(self.notes_dir, f"{safe_name}.md")
 
             if not os.path.isfile(notes_path):
-                return f"No notes found for project '{project}'. Use pc_write_notes to create some."
+                return f"No notes found for project '{resolved_key}'. Use pc_write_notes to create some."
 
             content = await asyncio.to_thread(self._read_file, notes_path)
-            return f"Notes for '{project}':\n\n{content}"
+            return f"Notes for '{resolved_key}':\n\n{content}"
         except Exception as exc:
             logger.exception("pc_read_notes failed")
             return f"Error reading notes: {exc}"
@@ -118,19 +120,20 @@ class ProjectNotesWriteModule(NovaModule):
             if mode not in ("replace", "append"):
                 return f"Error: invalid mode '{mode}'. Use 'replace' or 'append'."
 
-            if project not in self.projects:
+            resolved_key, project_info = resolve_project(project, self.projects)
+            if not resolved_key:
                 available = ", ".join(self.projects.keys()) if self.projects else "none"
                 return f"Error: unknown project '{project}'. Available projects: {available}"
 
-            safe_name = _sanitize_project_name(project)
+            safe_name = _sanitize_project_name(resolved_key)
             if not safe_name:
                 return f"Error: invalid project name '{project}'. Use only alphanumeric, hyphens, and underscores."
 
             await asyncio.to_thread(self._write_file, safe_name, content, mode)
 
             if mode == "append":
-                return f"Appended to notes for project '{project}'."
-            return f"Wrote notes for project '{project}'."
+                return f"Appended to notes for project '{resolved_key}'."
+            return f"Wrote notes for project '{resolved_key}'."
         except Exception as exc:
             logger.exception("pc_write_notes failed")
             return f"Error writing notes: {exc}"

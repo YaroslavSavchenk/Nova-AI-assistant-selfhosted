@@ -6,6 +6,7 @@ import os
 import shutil
 
 from modules.base import NovaModule
+from modules.pc_control._safety import resolve_project
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class ClaudeCodeModule(NovaModule):
 
             # Project takes precedence over working_directory
             if project:
-                project_info = self.projects.get(project)
+                _, project_info = resolve_project(project, self.projects)
                 if not project_info:
                     available = ", ".join(self.projects.keys()) if self.projects else "none"
                     return f"Error: unknown project '{project}'. Available projects: {available}"

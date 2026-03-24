@@ -52,6 +52,28 @@ def sanitize_path(path: str) -> str:
     return str(Path(path).expanduser().resolve())
 
 
+def resolve_project(name: str, projects: dict) -> tuple[str | None, dict | None]:
+    """Fuzzy-match a project name: exact → case-insensitive → substring.
+
+    Returns (resolved_key, project_info) or (None, None) if not found.
+    """
+    if not name or not projects:
+        return None, None
+    # Exact match
+    if name in projects:
+        return name, projects[name]
+    # Case-insensitive
+    lower = name.lower().strip()
+    for key, info in projects.items():
+        if key.lower() == lower:
+            return key, info
+    # Substring / contains (e.g. "nova project" contains "nova")
+    for key, info in projects.items():
+        if key.lower() in lower or lower in key.lower():
+            return key, info
+    return None, None
+
+
 def is_path_writable(path: str, writable_dirs: list[str]) -> bool:
     """Return True if *path* falls under one of the allowed writable directories."""
     resolved = Path(sanitize_path(path))
