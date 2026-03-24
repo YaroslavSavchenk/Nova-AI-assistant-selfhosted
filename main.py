@@ -232,6 +232,8 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
         logging.getLogger("voice.wake_word").setLevel(logging.WARNING)
         logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
+    # Always suppress aiosqlite noise — even in debug mode it's just SQL spam
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
 
 async def main() -> None:
@@ -352,7 +354,6 @@ async def main() -> None:
         tool_router.register(ReadFileModule())
         tool_router.register(WriteFileModule(writable_dirs=writable_dirs))
         tool_router.register(ListProjectsModule(projects=projects_cfg))
-        tool_router.register(ProjectNotesReadModule(projects=projects_cfg, notes_dir="data/notes"))
         tool_router.register(ProjectNotesWriteModule(projects=projects_cfg, notes_dir="data/notes"))
         tool_router.register(AskProjectModule(projects=projects_cfg, notes_dir="data/notes"))
         logger.debug("Registered pc_control modules")
