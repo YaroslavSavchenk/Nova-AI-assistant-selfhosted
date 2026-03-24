@@ -41,7 +41,7 @@ from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule  # 
 from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 from modules.calendar import CalendarListEventsModule, CalendarCreateEventModule, CalendarDeleteEventModule
 from modules.memory import RememberFactModule, RecallFactsModule, ForgetFactModule
-from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule
+from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule, ListProjectsModule, ProjectNotesReadModule, ProjectNotesWriteModule
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +335,8 @@ async def main() -> None:
         tool_router.register(SpotifyLyricsSearchModule())
         logger.debug("Registered module: spotify (spotify_play, spotify_control, spotify_now_playing, spotify_my_playlists, spotify_queue, spotify_view_queue, spotify_lyrics_search)")
 
+    projects_cfg = config.get("projects", {})
+
     if modules_cfg.get("pc_control", False):
         allowed_cmds = modules_cfg.get("pc_control_allowed_commands", [
             "ls", "cat", "head", "tail", "pwd", "whoami", "date", "df", "du", "ps",
@@ -345,10 +347,13 @@ async def main() -> None:
         writable_dirs = modules_cfg.get("pc_control_writable_dirs", ["~/Documents", "~/notes"])
 
         tool_router.register(RunCommandModule(allowed_commands=allowed_cmds, timeout=cmd_timeout))
-        tool_router.register(ClaudeCodeModule())
+        tool_router.register(ClaudeCodeModule(projects=projects_cfg))
         tool_router.register(OpenAppModule())
         tool_router.register(ReadFileModule())
         tool_router.register(WriteFileModule(writable_dirs=writable_dirs))
+        tool_router.register(ListProjectsModule(projects=projects_cfg))
+        tool_router.register(ProjectNotesReadModule(projects=projects_cfg, notes_dir="data/notes"))
+        tool_router.register(ProjectNotesWriteModule(projects=projects_cfg, notes_dir="data/notes"))
         logger.debug("Registered pc_control modules")
 
     brain = Brain(

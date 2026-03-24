@@ -65,6 +65,13 @@ modules:
     - ~/notes
   pc_control_command_timeout: 30
 
+# Register your development projects here so Nova can work with them.
+# Used by pc_list_projects, pc_claude_code (project param), and project notes.
+projects:
+  # my-project:
+  #   path: ~/projects/my-project
+  #   description: "Short description of the project"
+
 logging:
   level: INFO
   file: null  # Set to a path to log to file

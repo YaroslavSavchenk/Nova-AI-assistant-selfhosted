@@ -32,7 +32,8 @@ class ClaudeCodeModule(NovaModule):
     name: str = "pc_claude_code"
     description: str = (
         "Send a prompt to Claude Code CLI and return its response. "
-        "Use for code explanation, analysis, or getting AI assistance on files."
+        "Can target a specific project by name — use pc_list_projects to "
+        "see available projects."
     )
     parameters: dict = {
         "type": "object",
@@ -40,6 +41,13 @@ class ClaudeCodeModule(NovaModule):
             "prompt": {
                 "type": "string",
                 "description": "The prompt to send to Claude Code",
+            },
+            "project": {
+                "type": "string",
+                "description": (
+                    "Project name from the registered projects list "
+                    "(use pc_list_projects to see available projects)"
+                ),
             },
             "working_directory": {
                 "type": "string",
@@ -49,11 +57,13 @@ class ClaudeCodeModule(NovaModule):
         "required": ["prompt"],
     }
 
-    def __init__(self, timeout: int = 120) -> None:
+    def __init__(self, timeout: int = 120, projects: dict | None = None) -> None:
         self.timeout = timeout
+        self.projects = projects or {}
 
     async def run(self, **kwargs) -> str:
         prompt: str = kwargs.get("prompt", "")
+        project: str = kwargs.get("project", "")
         working_directory: str = kwargs.get("working_directory", "")
 
         if not prompt.strip():
@@ -64,8 +74,20 @@ class ClaudeCodeModule(NovaModule):
             if not claude_bin:
                 return "Error: 'claude' CLI not found. Is Claude Code installed and on PATH?"
 
-            cwd = working_directory if working_directory else os.path.expanduser("~")
-            cwd = os.path.expanduser(cwd)  # resolve ~ in working_directory
+            # Project takes precedence over working_directory
+            if project:
+                project_info = self.projects.get(project)
+                if not project_info:
+                    available = ", ".join(self.projects.keys()) if self.projects else "none"
+                    return f"Error: unknown project '{project}'. Available projects: {available}"
+                cwd = os.path.expanduser(project_info.get("path", ""))
+            elif working_directory:
+                cwd = os.path.expanduser(working_directory)
+            else:
+                cwd = os.path.expanduser("~")
+
+            if not os.path.isdir(cwd):
+                return f"Error: working directory '{cwd}' does not exist."
 
             proc = await asyncio.create_subprocess_exec(
                 claude_bin, "-p", prompt,
