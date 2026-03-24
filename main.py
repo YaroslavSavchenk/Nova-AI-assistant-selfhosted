@@ -217,7 +217,7 @@ def parse_args() -> argparse.Namespace:
 
 def setup_logging(debug: bool, log_file: str | None) -> None:
     level = logging.DEBUG if debug else logging.INFO
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
     if log_file:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
     logging.basicConfig(

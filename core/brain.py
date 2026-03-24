@@ -378,11 +378,12 @@ class Brain:
         tools = self._tool_router.get_tool_definitions()
 
         # 4–6. Tool-calling loop
-        # Track expensive tool calls that returned substantial results so we
-        # can block the LLM from re-calling them (it gets confused by large
-        # tool outputs and loops). Keyed by (name, args_json).
+        # Tools that produce large results (Claude Code, project queries) tend
+        # to make the LLM chain more calls instead of responding. After one of
+        # these returns, we force the LLM to produce a text response.
+        _EXPENSIVE_TOOLS = {"pc_ask_project", "pc_claude_code"}
         _completed_expensive: dict[tuple[str, str], str] = {}
-        _EXPENSIVE_RESULT_THRESHOLD = 500  # chars — below this, allow re-calls
+        _EXPENSIVE_RESULT_THRESHOLD = 500
 
         for iteration in range(_MAX_TOOL_ITERATIONS):
             response = await self._provider.chat(
@@ -452,6 +453,21 @@ class Brain:
                     # Track expensive calls so we can block duplicate re-calls
                     if len(result) >= _EXPENSIVE_RESULT_THRESHOLD:
                         _completed_expensive[call_sig] = result
+
+                    # After an expensive tool returns, force the LLM to
+                    # respond with text instead of chaining more tool calls.
+                    if tool_name in _EXPENSIVE_TOOLS and len(result) >= _EXPENSIVE_RESULT_THRESHOLD:
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Now summarise the tool result above for me. "
+                                    "Do NOT call any more tools."
+                                ),
+                            }
+                        )
+                        force_text = True
+                        break
 
                 if force_text:
                     # Continue the outer loop so the LLM gets another chance
