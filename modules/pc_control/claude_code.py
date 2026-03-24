@@ -32,6 +32,9 @@ class ClaudeCodeModule(NovaModule):
         "required": ["prompt"],
     }
 
+    def __init__(self, timeout: int = 120) -> None:
+        self.timeout = timeout
+
     async def run(self, **kwargs) -> str:
         prompt: str = kwargs.get("prompt", "")
         working_directory: str = kwargs.get("working_directory", "")
@@ -51,12 +54,12 @@ class ClaudeCodeModule(NovaModule):
 
             try:
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=120
+                    proc.communicate(), timeout=self.timeout
                 )
             except asyncio.TimeoutError:
                 proc.kill()
                 await proc.wait()
-                return "Claude Code timed out after 120s."
+                return f"Claude Code timed out after {self.timeout}s."
 
             output = stdout.decode("utf-8", errors="replace").strip()
             err_output = stderr.decode("utf-8", errors="replace").strip()
