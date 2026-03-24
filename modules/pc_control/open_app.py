@@ -10,7 +10,7 @@ from modules.base import NovaModule
 logger = logging.getLogger(__name__)
 
 # A safe CWD for cmd.exe — UNC paths (\\wsl.localhost\...) are not supported.
-_WIN_SAFE_CWD = r"C:\Windows"
+_WIN_SAFE_CWD = "/mnt/c/Windows"
 
 # Mapping of friendly names → Windows executables or commands.
 # Keys are lowercased for matching.  Values are passed to cmd.exe /c start.
