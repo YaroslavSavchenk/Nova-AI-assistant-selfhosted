@@ -54,6 +54,12 @@ modules:
     - sort
     - find
     - grep
+    # Windows commands (accessible from WSL2)
+    - powershell.exe
+    - cmd.exe
+    - wslpath
+    - ipconfig.exe
+    - tasklist.exe
   pc_control_writable_dirs:
     - ~/Documents
     - ~/notes

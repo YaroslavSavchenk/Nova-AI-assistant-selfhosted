@@ -339,6 +339,7 @@ async def main() -> None:
         allowed_cmds = modules_cfg.get("pc_control_allowed_commands", [
             "ls", "cat", "head", "tail", "pwd", "whoami", "date", "df", "du", "ps",
             "code", "claude", "which", "echo", "wc", "sort", "find", "grep",
+            "powershell.exe", "cmd.exe", "wslpath", "ipconfig.exe", "tasklist.exe",
         ])
         cmd_timeout = modules_cfg.get("pc_control_command_timeout", 30)
         writable_dirs = modules_cfg.get("pc_control_writable_dirs", ["~/Documents", "~/notes"])

@@ -3,10 +3,9 @@ Tests for the pc_control package — safety utilities and all five modules.
 """
 
 import os
-import tempfile
 
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 
 from modules.pc_control._safety import validate_command, sanitize_path, is_path_writable
 from modules.pc_control import (
@@ -256,9 +255,11 @@ class TestOpenAppModule:
         mock_proc.communicate = AsyncMock(return_value=(b"", b""))
         mock_proc.returncode = 0
 
-        with patch("modules.pc_control.open_app.asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch("modules.pc_control.open_app.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             result = await open_app.run(target="https://example.com")
         assert "Opened" in result
+        # URLs open via cmd.exe /c start
+        assert mock_exec.call_args[0][0] == "cmd.exe"
 
     @pytest.mark.asyncio
     async def test_opens_known_app(self, open_app):
@@ -274,15 +275,42 @@ class TestOpenAppModule:
         assert mock_exec.call_args[0][0] == "code"
 
     @pytest.mark.asyncio
-    async def test_fallback_wslview(self, open_app):
+    async def test_opens_windows_app(self, open_app):
+        """Known Windows apps like chrome, spotify, task manager should resolve."""
         mock_proc = AsyncMock()
         mock_proc.communicate = AsyncMock(return_value=(b"", b""))
         mock_proc.returncode = 0
 
         with patch("modules.pc_control.open_app.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
-            result = await open_app.run(target="somefile.pdf")
+            result = await open_app.run(target="chrome")
         assert "Opened" in result
-        assert mock_exec.call_args[0][0] == "wslview"
+        assert mock_exec.call_args[0][0] == "cmd.exe"
+
+    @pytest.mark.asyncio
+    async def test_fallback_cmd_start(self, open_app):
+        """Unknown targets fall back to cmd.exe /c start."""
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        mock_proc.returncode = 0
+
+        with patch("modules.pc_control.open_app.shutil.which", return_value=None):
+            with patch("modules.pc_control.open_app.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+                result = await open_app.run(target="somefile.pdf")
+        assert "Opened" in result
+        assert mock_exec.call_args[0][0] == "cmd.exe"
+
+    @pytest.mark.asyncio
+    async def test_direct_executable(self, open_app):
+        """If the target is a real executable on PATH, run it directly."""
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        mock_proc.returncode = 0
+
+        with patch("modules.pc_control.open_app.shutil.which", return_value="/usr/bin/htop"):
+            with patch("modules.pc_control.open_app.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+                result = await open_app.run(target="htop")
+        assert "Opened" in result
+        assert mock_exec.call_args[0][0] == "htop"
 
 
 # ---------------------------------------------------------------------------
