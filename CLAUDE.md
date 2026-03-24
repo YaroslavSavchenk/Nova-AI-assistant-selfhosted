@@ -57,26 +57,40 @@ nova/
 │   │   ├── list_events.py   # CalendarListEventsModule
 │   │   ├── create_event.py  # CalendarCreateEventModule
 │   │   └── delete_event.py  # CalendarDeleteEventModule
-│   └── spotify/             # Spotify package
-│       ├── __init__.py      # Re-exports all public module classes
-│       ├── _client.py       # Shared spotipy client + device helpers
-│       ├── _helpers.py      # Shared formatting/parsing helpers
-│       ├── play.py          # SpotifyPlayModule
-│       ├── control.py       # SpotifyControlModule, SpotifySkipToModule
-│       ├── now_playing.py   # SpotifyNowPlayingModule
-│       ├── queue.py         # SpotifyQueueModule, SpotifyViewQueueModule
-│       ├── playlists.py     # SpotifyMyPlaylistsModule
-│       └── lyrics_search.py # SpotifyLyricsSearchModule (Genius API)
+│   ├── spotify/             # Spotify package
+│   │   ├── __init__.py      # Re-exports all public module classes
+│   │   ├── _client.py       # Shared spotipy client + device helpers
+│   │   ├── _helpers.py      # Shared formatting/parsing helpers
+│   │   ├── play.py          # SpotifyPlayModule
+│   │   ├── control.py       # SpotifyControlModule, SpotifySkipToModule
+│   │   ├── now_playing.py   # SpotifyNowPlayingModule
+│   │   ├── queue.py         # SpotifyQueueModule, SpotifyViewQueueModule
+│   │   ├── playlists.py     # SpotifyMyPlaylistsModule
+│   │   └── lyrics_search.py # SpotifyLyricsSearchModule (Genius API)
+│   └── pc_control/          # PC control tools (Phase 8)
+│       ├── __init__.py      # Re-exports all module classes
+│       ├── _safety.py       # Allowlist validation, shell injection prevention, fuzzy project resolution
+│       ├── run_command.py   # RunCommandModule
+│       ├── claude_code.py   # ClaudeCodeModule
+│       ├── open_app.py      # OpenAppModule (WSL2-aware, 30+ Windows app shortcuts)
+│       ├── read_file.py     # ReadFileModule
+│       ├── write_file.py    # WriteFileModule
+│       ├── projects.py      # ListProjectsModule
+│       ├── notes.py         # ProjectNotesReadModule, ProjectNotesWriteModule
+│       └── ask_project.py   # AskProjectModule (combined notes + Claude Code)
 ├── scripts/
 │   ├── spotify_auth.py      # One-time Spotify OAuth token setup
 │   └── google_auth.py       # Google Calendar service account connection test
 ├── data/
-│   └── memory.db            # SQLite database (gitignored)
+│   ├── memory.db            # SQLite database (gitignored)
+│   └── notes/               # Project notes written by Nova (gitignored)
 └── tests/
     ├── test_brain.py
     ├── test_memory.py
     ├── test_long_term_memory.py
     └── test_modules/
+        ├── test_pc_control.py            # 51 tests for PC control modules
+        └── test_pc_control_projects.py   # 19 tests for project/notes modules
 ```
 
 ## Module Contract
@@ -120,7 +134,7 @@ class LLMProvider(ABC):
     async def chat(self, messages, tools=None, thinking=False) -> LLMResponse
     
 class OllamaProvider(LLMProvider):  # Current default
-class ClaudeProvider(LLMProvider):  # Phase 8 — not yet implemented
+class ClaudeProvider(LLMProvider):  # Planned — not yet implemented
 ```
 
 System prompt for Nova's personality lives in `core/prompts/system.md`. Edit personality there, not in `brain.py`.
@@ -151,6 +165,16 @@ STT and TTS run in separate async tasks so Nova can listen while speaking is sti
 - **Default session**: Each `python main.py` run gets a fresh UUID session (`run-<hex8>`). No history bleed between runs.
 - **Named sessions**: Pass `--session work` to resume a persistent named session with full history.
 - This prevents stale Spotify state (e.g. "Now playing: X") from a previous run contaminating the LLM's context.
+
+## PC Control (Phase 8)
+
+Nova can run shell commands, open Windows apps, read/write files, and delegate coding tasks to Claude Code. All operations are sandboxed:
+
+- **Command allowlist**: Only commands listed in `modules.pc_control_allowed_commands` can run. Shell metacharacters (`|`, `;`, `&&`, `` ` ``, `$()`) are blocked to prevent injection.
+- **Writable directory allowlist**: `WriteFileModule` only writes to paths under `modules.pc_control_writable_dirs`.
+- **Project registry**: The `projects:` top-level key in `config.yaml` maps project names to paths. `ListProjectsModule`, `AskProjectModule`, and `ClaudeCodeModule` resolve projects by fuzzy name match via `_safety.py`.
+- **Project notes**: Stored as Markdown files in `data/notes/` (one per project, gitignored). Nova reads/writes notes to remember project context across sessions.
+- **Command timeout**: Configurable via `modules.pc_control_command_timeout` (default 30s).
 
 ## When Compacting
 
