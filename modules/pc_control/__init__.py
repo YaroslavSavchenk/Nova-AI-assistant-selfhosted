@@ -7,6 +7,7 @@ from modules.pc_control.read_file import ReadFileModule
 from modules.pc_control.write_file import WriteFileModule
 from modules.pc_control.projects import ListProjectsModule
 from modules.pc_control.notes import ProjectNotesReadModule, ProjectNotesWriteModule
+from modules.pc_control.ask_project import AskProjectModule
 
 __all__ = [
     "RunCommandModule",
@@ -17,4 +18,5 @@ __all__ = [
     "ListProjectsModule",
     "ProjectNotesReadModule",
     "ProjectNotesWriteModule",
+    "AskProjectModule",
 ]

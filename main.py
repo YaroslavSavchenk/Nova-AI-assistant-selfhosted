@@ -41,7 +41,7 @@ from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule  # 
 from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 from modules.calendar import CalendarListEventsModule, CalendarCreateEventModule, CalendarDeleteEventModule
 from modules.memory import RememberFactModule, RecallFactsModule, ForgetFactModule
-from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule, ListProjectsModule, ProjectNotesReadModule, ProjectNotesWriteModule
+from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule, ListProjectsModule, ProjectNotesReadModule, ProjectNotesWriteModule, AskProjectModule
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +354,7 @@ async def main() -> None:
         tool_router.register(ListProjectsModule(projects=projects_cfg))
         tool_router.register(ProjectNotesReadModule(projects=projects_cfg, notes_dir="data/notes"))
         tool_router.register(ProjectNotesWriteModule(projects=projects_cfg, notes_dir="data/notes"))
+        tool_router.register(AskProjectModule(projects=projects_cfg, notes_dir="data/notes"))
         logger.debug("Registered pc_control modules")
 
     brain = Brain(
