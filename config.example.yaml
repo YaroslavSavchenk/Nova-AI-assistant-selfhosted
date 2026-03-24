@@ -33,6 +33,32 @@ modules:
   calendar_id: "your.email@gmail.com"   # Your Google Calendar email
   calendar_timezone: "Europe/Amsterdam" # IANA timezone for new events
 
+  # PC Control — let Nova run shell commands, open apps, and interact with files
+  pc_control: false
+  pc_control_allowed_commands:
+    - ls
+    - cat
+    - head
+    - tail
+    - pwd
+    - whoami
+    - date
+    - df
+    - du
+    - ps
+    - code
+    - claude
+    - which
+    - echo
+    - wc
+    - sort
+    - find
+    - grep
+  pc_control_writable_dirs:
+    - ~/Documents
+    - ~/notes
+  pc_control_command_timeout: 30
+
 logging:
   level: INFO
   file: null  # Set to a path to log to file
