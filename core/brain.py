@@ -378,6 +378,12 @@ class Brain:
         tools = self._tool_router.get_tool_definitions()
 
         # 4–6. Tool-calling loop
+        # Track expensive tool calls that returned substantial results so we
+        # can block the LLM from re-calling them (it gets confused by large
+        # tool outputs and loops). Keyed by (name, args_json).
+        _completed_expensive: dict[tuple[str, str], str] = {}
+        _EXPENSIVE_RESULT_THRESHOLD = 500  # chars — below this, allow re-calls
+
         for iteration in range(_MAX_TOOL_ITERATIONS):
             response = await self._provider.chat(
                 messages=messages,
@@ -386,9 +392,31 @@ class Brain:
             )
 
             if response.tool_calls:
+                force_text = False
                 for tc in response.tool_calls:
                     tool_name = tc["name"]
                     tool_args = tc.get("arguments", {})
+
+                    # Detect duplicate call to a tool that already returned a
+                    # large result — the LLM is looping, not making progress.
+                    call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
+                    if call_sig in _completed_expensive:
+                        logger.warning(
+                            "Duplicate tool call detected: %s — forcing text response",
+                            tool_name,
+                        )
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You already called that tool and got a result. "
+                                    "Please answer based on the information you have."
+                                ),
+                            }
+                        )
+                        force_text = True
+                        break
+
                     logger.debug("[tool] → %s(%s)", tool_name, tool_args)
                     # Always show tool activity to the user so they know Nova isn't stuck
                     _print_tool_status(tool_name, tool_args)
@@ -420,6 +448,15 @@ class Brain:
                     await self._memory.add_message(
                         session_id, "tool", result, tool_name=tool_name
                     )
+
+                    # Track expensive calls so we can block duplicate re-calls
+                    if len(result) >= _EXPENSIVE_RESULT_THRESHOLD:
+                        _completed_expensive[call_sig] = result
+
+                if force_text:
+                    # Continue the outer loop so the LLM gets another chance
+                    # to produce a text response instead of re-calling a tool.
+                    continue
             else:
                 # Final text response
                 final_text = response.content or ""

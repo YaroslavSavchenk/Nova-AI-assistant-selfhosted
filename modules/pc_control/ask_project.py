@@ -10,7 +10,7 @@ from modules.pc_control._safety import resolve_project
 
 logger = logging.getLogger(__name__)
 
-_MAX_OUTPUT = 6000
+_MAX_OUTPUT = 3000
 
 
 def _find_claude_cli() -> str | None:
@@ -122,7 +122,16 @@ class AskProjectModule(NovaModule):
             if len(output) > _MAX_OUTPUT:
                 output = output[:_MAX_OUTPUT] + "\n\n[truncated]"
 
-            return output if output else "(Claude Code produced no output)"
+            if not output:
+                return "(Claude Code produced no output)"
+
+            # Prefix the result with an instruction so the LLM summarises
+            # instead of re-calling the tool with the same question.
+            return (
+                f"[Claude Code answer for '{resolved_key}' — "
+                f"summarise this for the user, do NOT call pc_ask_project again]\n\n"
+                + output
+            )
 
         except Exception as exc:
             logger.exception("pc_ask_project failed")
