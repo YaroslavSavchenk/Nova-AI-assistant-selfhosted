@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 8 next — Provider Abstraction
+## Current status: Phase 8 next — PC Control
 
 ---
 
@@ -252,26 +252,7 @@ memory:
 
 ---
 
-## Phase 8 — Provider Abstraction `[PLANNED]`
-
-Enable swapping the LLM brain from Ollama to Claude or OpenAI.
-
-**Files:**
-- `providers/base.py` — `LLMProvider` ABC (already specced in CLAUDE.md)
-- `providers/ollama_provider.py` — current default
-- `providers/claude_provider.py` — Anthropic API
-- `providers/openai_provider.py` — OpenAI API
-
-**Use cases:**
-- Fall back to Claude API when the local model is unavailable
-- Route complex reasoning tasks to a larger cloud model
-- A/B test response quality between providers
-
-**Config:** `config.yaml` `brain.provider: ollama | claude | openai` — hot-swappable without restart ideally.
-
----
-
-## Phase 9 — PC Control `[PLANNED]`
+## Phase 8 — PC Control `[PLANNED]`
 
 Let Nova interact with the local machine — run commands, control apps, and act as an agent that can operate your dev environment.
 
@@ -295,7 +276,7 @@ Let Nova interact with the local machine — run commands, control apps, and act
 
 ---
 
-## Phase 10 — Persona `[PLANNED]`
+## Phase 9 — Persona `[PLANNED]`
 
 Give Nova a fully customizable personality layer — name, voice, tone, language defaults, and behavioral traits.
 
@@ -320,6 +301,7 @@ Give Nova a fully customizable personality layer — name, voice, tone, language
 
 These are not scheduled but worth keeping track of:
 
+- **Provider Abstraction** — Swap the LLM brain from Ollama to Claude or OpenAI. `providers/` package with `LLMProvider` ABC, `OllamaProvider`, `ClaudeProvider`, `OpenAIProvider`. Config: `brain.provider: ollama | claude | openai`. Use cases: cloud fallback, routing complex tasks to larger models, A/B testing response quality.
 - **Email (Gmail)** — Read recent emails, send with mandatory confirmation preview. Excluded from Phase 6 (Calendar) by design — highest privacy risk, revisit later.
 - **Smart Home** — Home Assistant REST API integration (lights, switches, scenes, sensors). Config: `HA_URL`, `HA_TOKEN`. Module: `modules/smart_home.py`. Skipped Phase 3 — no HA setup yet.
 - **File assistant** — read, summarize, and answer questions about local files (PDFs, text, code)
