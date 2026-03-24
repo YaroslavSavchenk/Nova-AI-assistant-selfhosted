@@ -134,6 +134,33 @@ class OllamaProvider(LLMProvider):
 
 
 # ---------------------------------------------------------------------------
+# Tool status messages (always visible to the user)
+# ---------------------------------------------------------------------------
+
+# Tools that may take a while — show a friendlier message
+_TOOL_STATUS: dict[str, str] = {
+    "pc_ask_project": "Asking Claude Code about {project}...",
+    "pc_claude_code": "Running Claude Code...",
+    "pc_open_app": "Opening {target}...",
+    "web_search": "Searching the web...",
+    "wikipedia_lookup": "Looking up Wikipedia...",
+    "summarize_url": "Reading URL...",
+    "news_headlines": "Fetching news...",
+}
+
+
+def _print_tool_status(tool_name: str, tool_args: dict) -> None:
+    """Print a short user-visible status line when a tool is invoked."""
+    template = _TOOL_STATUS.get(tool_name)
+    if template:
+        try:
+            msg = template.format(**tool_args)
+        except KeyError:
+            msg = template.split("...")[0] + "..."
+        print(f"  [{msg}]", flush=True)
+
+
+# ---------------------------------------------------------------------------
 # Brain
 # ---------------------------------------------------------------------------
 
@@ -363,6 +390,8 @@ class Brain:
                     tool_name = tc["name"]
                     tool_args = tc.get("arguments", {})
                     logger.debug("[tool] → %s(%s)", tool_name, tool_args)
+                    # Always show tool activity to the user so they know Nova isn't stuck
+                    _print_tool_status(tool_name, tool_args)
 
                     result = await self._tool_router.dispatch(tool_name, tool_args)
                     logger.debug("[tool] ← %s: %s", tool_name, result)
