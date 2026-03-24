@@ -3,12 +3,29 @@
 import asyncio
 import logging
 import os
+import shutil
 
 from modules.base import NovaModule
 
 logger = logging.getLogger(__name__)
 
 _MAX_OUTPUT = 6000
+
+
+def _find_claude_cli() -> str | None:
+    """Find the claude CLI binary, checking common locations."""
+    # shutil.which checks PATH
+    found = shutil.which("claude")
+    if found:
+        return found
+    # Common install locations not always on PATH
+    for candidate in [
+        os.path.expanduser("~/.local/bin/claude"),
+        "/usr/local/bin/claude",
+    ]:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
 
 
 class ClaudeCodeModule(NovaModule):
@@ -43,10 +60,15 @@ class ClaudeCodeModule(NovaModule):
             return "Error: prompt cannot be empty."
 
         try:
+            claude_bin = _find_claude_cli()
+            if not claude_bin:
+                return "Error: 'claude' CLI not found. Is Claude Code installed and on PATH?"
+
             cwd = working_directory if working_directory else os.path.expanduser("~")
+            cwd = os.path.expanduser(cwd)  # resolve ~ in working_directory
 
             proc = await asyncio.create_subprocess_exec(
-                "claude", "-p", prompt,
+                claude_bin, "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,

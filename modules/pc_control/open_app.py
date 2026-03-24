@@ -2,11 +2,15 @@
 
 import asyncio
 import logging
+import os
 import shutil
 
 from modules.base import NovaModule
 
 logger = logging.getLogger(__name__)
+
+# A safe CWD for cmd.exe — UNC paths (\\wsl.localhost\...) are not supported.
+_WIN_SAFE_CWD = r"C:\Windows"
 
 # Mapping of friendly names → Windows executables or commands.
 # Keys are lowercased for matching.  Values are passed to cmd.exe /c start.
@@ -36,6 +40,8 @@ _APP_SHORTCUTS: dict[str, list[str]] = {
     "paint": ["mspaint.exe"],
     "snipping tool": ["snippingtool.exe"],
     # Common apps (these use cmd.exe /c start to resolve Start Menu shortcuts)
+    "claude": ["cmd.exe", "/c", "start", "claude:"],
+    "claude app": ["cmd.exe", "/c", "start", "claude:"],
     "spotify": ["cmd.exe", "/c", "start", "spotify:"],
     "discord": ["cmd.exe", "/c", "start", "discord:"],
     "steam": ["cmd.exe", "/c", "start", "steam://open/main"],
@@ -108,10 +114,13 @@ class OpenAppModule(NovaModule):
 
     async def _exec(self, cmd: list[str], target: str) -> str:
         """Run the open command and return a confirmation or error."""
+        # cmd.exe chokes on UNC paths as CWD — use a Windows-safe directory.
+        cwd = _WIN_SAFE_CWD if cmd[0] == "cmd.exe" else None
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
         )
 
         try:
