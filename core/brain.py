@@ -127,10 +127,46 @@ class OllamaProvider(LLMProvider):
             ]
             return LLMResponse(tool_calls=tool_calls)
 
-        # Strip <think>...</think> blocks that Qwen3 emits in thinking mode
+        # Strip <think>...</think> blocks that Qwen3 emits even with thinking off.
+        # Also handle corrupted/partial tags (e.g. unicode artifacts like 崧)
+        # and unclosed <think> blocks (strip everything from <think> to end).
         content = msg.content or ""
-        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        # Closed think blocks
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+        # Unclosed think block (Qwen3 sometimes forgets to close)
+        content = re.sub(r"<think>.*", "", content, flags=re.DOTALL)
+        # Strip common Qwen3 unicode artifacts before real content
+        content = content.lstrip("崧\n\r\t ")
+        content = content.strip()
         return LLMResponse(content=content)
+
+
+# ---------------------------------------------------------------------------
+# Tool status messages (always visible to the user)
+# ---------------------------------------------------------------------------
+
+# Tools that may take a while — show a friendlier message
+_TOOL_STATUS: dict[str, str] = {
+    "pc_ask_project": "Asking Claude Code about {project}...",
+    "pc_claude_code": "Running Claude Code...",
+    "pc_open_app": "Opening {target}...",
+    "web_search": "Searching the web...",
+    "wikipedia_lookup": "Looking up Wikipedia...",
+    "summarize_url": "Reading URL...",
+    "news_headlines": "Fetching news...",
+    "cc_workflow_run": "Running workflow step...",
+}
+
+
+def _print_tool_status(tool_name: str, tool_args: dict) -> None:
+    """Print a short user-visible status line when a tool is invoked."""
+    template = _TOOL_STATUS.get(tool_name)
+    if template:
+        try:
+            msg = template.format(**tool_args)
+        except KeyError:
+            msg = template.split("...")[0] + "..."
+        print(f"  [{msg}]", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +272,7 @@ class Brain:
             logger.debug("No sessions need summarizing.")
             return
 
-        logger.info("Summarizing %d old session(s) in background...", len(pending))
+        logger.debug("Summarizing %d old session(s) in background...", len(pending))
 
         for session_id, messages in pending:
             await self._summarize_session(session_id, messages)
@@ -259,7 +295,7 @@ class Brain:
             summary, facts = self._parse_summary_response(raw, session_id)
 
             await self._ltm.add_summary(session_id, summary, len(messages))
-            logger.info("Summarized session %s: %s", session_id, summary[:80])
+            logger.debug("Summarized session %s: %s", session_id, summary[:80])
 
             for fact in facts:
                 if fact.strip():
@@ -299,7 +335,7 @@ class Brain:
         else:
             # Last resort: use the raw text truncated as the summary
             summary = raw[:300].strip() or f"Conversation session {session_id}"
-            logger.warning(
+            logger.debug(
                 "Could not parse summary JSON for session %s — using raw text fallback",
                 session_id,
             )
@@ -351,21 +387,65 @@ class Brain:
         tools = self._tool_router.get_tool_definitions()
 
         # 4–6. Tool-calling loop
+        # Tools that produce large results (Claude Code, project queries) tend
+        # to make the LLM chain more calls instead of responding. After one of
+        # these returns, we force the LLM to produce a text response.
+        _EXPENSIVE_TOOLS = {"pc_ask_project", "pc_claude_code", "cc_workflow_run"}
+        # Tools that should ALWAYS force a text response after completing,
+        # regardless of output size. Prevents the LLM from chaining actions
+        # (e.g. adding a workflow step then immediately executing it).
+        _STOP_AFTER_TOOLS = {
+            "cc_workflow_create", "cc_workflow_add_step",
+            "cc_workflow_delete", "cc_workflow_edit_step",
+        }
+        _completed_expensive: dict[tuple[str, str], str] = {}
+        _EXPENSIVE_RESULT_THRESHOLD = 500
+        _force_text_next = False  # When True, next LLM call omits tools
+
         for iteration in range(_MAX_TOOL_ITERATIONS):
+            # When forcing text, omit tool definitions so the LLM focuses
+            # on the conversation instead of being distracted by 30+ schemas.
+            iter_tools = None if _force_text_next else (tools or None)
+            _force_text_next = False
+
             response = await self._provider.chat(
                 messages=messages,
-                tools=tools or None,
+                tools=iter_tools,
                 thinking=self._thinking,
             )
 
             if response.tool_calls:
+                force_text = False
                 for tc in response.tool_calls:
                     tool_name = tc["name"]
                     tool_args = tc.get("arguments", {})
-                    logger.info("[tool] → %s(%s)", tool_name, tool_args)
+
+                    # Detect duplicate call to a tool that already returned a
+                    # large result — the LLM is looping, not making progress.
+                    call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
+                    if call_sig in _completed_expensive:
+                        logger.warning(
+                            "Duplicate tool call detected: %s — forcing text response",
+                            tool_name,
+                        )
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You already called that tool and got a result. "
+                                    "Please answer based on the information you have."
+                                ),
+                            }
+                        )
+                        force_text = True
+                        break
+
+                    logger.debug("[tool] → %s(%s)", tool_name, tool_args)
+                    # Always show tool activity to the user so they know Nova isn't stuck
+                    _print_tool_status(tool_name, tool_args)
 
                     result = await self._tool_router.dispatch(tool_name, tool_args)
-                    logger.info("[tool] ← %s: %s", tool_name, result)
+                    logger.debug("[tool] ← %s: %s", tool_name, result)
 
                     # Add assistant tool-call turn and tool result to in-memory
                     # message list (not persisted — tool turns are transient)
@@ -391,6 +471,48 @@ class Brain:
                     await self._memory.add_message(
                         session_id, "tool", result, tool_name=tool_name
                     )
+
+                    # Track expensive calls so we can block duplicate re-calls
+                    if len(result) >= _EXPENSIVE_RESULT_THRESHOLD:
+                        _completed_expensive[call_sig] = result
+
+                    # After an expensive tool returns, force the LLM to
+                    # respond with text instead of chaining more tool calls.
+                    if tool_name in _EXPENSIVE_TOOLS and len(result) >= _EXPENSIVE_RESULT_THRESHOLD:
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Now summarise the tool result above for me. "
+                                    "Do NOT call any more tools."
+                                ),
+                            }
+                        )
+                        force_text = True
+                        break
+
+                    # Stop-after tools: always force text response.
+                    # Prevents chaining (e.g. add step then execute it).
+                    if tool_name in _STOP_AFTER_TOOLS:
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Tell the user what happened based on the tool "
+                                    "result above. Do NOT call any more tools."
+                                ),
+                            }
+                        )
+                        force_text = True
+                        break
+
+                if force_text:
+                    # Continue the outer loop so the LLM gets another chance
+                    # to produce a text response instead of re-calling a tool.
+                    # Omit tool definitions next iteration so the LLM focuses
+                    # on the conversation, not 30+ tool schemas.
+                    _force_text_next = True
+                    continue
             else:
                 # Final text response
                 final_text = response.content or ""

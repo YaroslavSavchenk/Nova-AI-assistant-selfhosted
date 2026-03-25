@@ -41,6 +41,7 @@ from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule  # 
 from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 from modules.calendar import CalendarListEventsModule, CalendarCreateEventModule, CalendarDeleteEventModule
 from modules.memory import RememberFactModule, RecallFactsModule, ForgetFactModule
+from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule, ListProjectsModule, ProjectNotesWriteModule, AskProjectModule
 
 
 # ---------------------------------------------------------------------------
@@ -98,9 +99,11 @@ async def repl(brain: Brain, session_id: str) -> None:
             continue
 
         try:
-            print("Nova is thinking...", end="\r", flush=True)
+            _thinking_msg = "Nova is thinking..."
+            print(_thinking_msg, end="\r", flush=True)
             response = await brain.chat(user_input, session_id=session_id)
-            print(" " * 20, end="\r")  # clear the thinking line
+            # Clear the "thinking" line fully (handles any leftover chars)
+            print(" " * len(_thinking_msg), end="\r")
             print(f"\n{response}\n")
         except Exception as exc:
             logging.getLogger(__name__).exception("Unexpected error in brain.chat")
@@ -214,7 +217,7 @@ def parse_args() -> argparse.Namespace:
 
 def setup_logging(debug: bool, log_file: str | None) -> None:
     level = logging.DEBUG if debug else logging.INFO
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
     if log_file:
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
     logging.basicConfig(
@@ -231,6 +234,8 @@ def setup_logging(debug: bool, log_file: str | None) -> None:
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
         logging.getLogger("voice.wake_word").setLevel(logging.WARNING)
         logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
+    # Always suppress aiosqlite noise — even in debug mode it's just SQL spam
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
 
 async def main() -> None:
@@ -333,6 +338,43 @@ async def main() -> None:
         tool_router.register(SpotifySkipToModule())
         tool_router.register(SpotifyLyricsSearchModule())
         logger.debug("Registered module: spotify (spotify_play, spotify_control, spotify_now_playing, spotify_my_playlists, spotify_queue, spotify_view_queue, spotify_lyrics_search)")
+
+    projects_cfg = config.get("projects", {})
+
+    if modules_cfg.get("pc_control", False):
+        allowed_cmds = modules_cfg.get("pc_control_allowed_commands", [
+            "ls", "cat", "head", "tail", "pwd", "whoami", "date", "df", "du", "ps",
+            "code", "claude", "which", "echo", "wc", "sort", "find", "grep",
+            "powershell.exe", "cmd.exe", "wslpath", "ipconfig.exe", "tasklist.exe",
+        ])
+        cmd_timeout = modules_cfg.get("pc_control_command_timeout", 30)
+        writable_dirs = modules_cfg.get("pc_control_writable_dirs", ["~/Documents", "~/notes"])
+
+        tool_router.register(RunCommandModule(allowed_commands=allowed_cmds, timeout=cmd_timeout))
+        tool_router.register(ClaudeCodeModule(projects=projects_cfg))
+        tool_router.register(OpenAppModule())
+        tool_router.register(ReadFileModule())
+        tool_router.register(WriteFileModule(writable_dirs=writable_dirs))
+        tool_router.register(ListProjectsModule(projects=projects_cfg))
+        tool_router.register(ProjectNotesWriteModule(projects=projects_cfg, notes_dir="data/notes"))
+        tool_router.register(AskProjectModule(projects=projects_cfg, notes_dir="data/notes"))
+        logger.debug("Registered pc_control modules")
+
+    if modules_cfg.get("cc_workflows", False):
+        from modules.cc_workflows import (
+            CCWorkflowCreateModule, CCWorkflowAddStepModule,
+            CCWorkflowListModule, CCWorkflowViewModule,
+            CCWorkflowRunModule, CCWorkflowEditStepModule,
+            CCWorkflowDeleteModule,
+        )
+        tool_router.register(CCWorkflowCreateModule(projects=projects_cfg))
+        tool_router.register(CCWorkflowAddStepModule())
+        tool_router.register(CCWorkflowListModule())
+        tool_router.register(CCWorkflowViewModule())
+        tool_router.register(CCWorkflowRunModule())
+        tool_router.register(CCWorkflowEditStepModule())
+        tool_router.register(CCWorkflowDeleteModule())
+        logger.debug("Registered cc_workflows modules")
 
     brain = Brain(
         config=config,

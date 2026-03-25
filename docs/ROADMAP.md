@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 8 next — Provider Abstraction
+## Current status: Phase 9 next — Claude Code Workflows
 
 ---
 
@@ -252,46 +252,108 @@ memory:
 
 ---
 
-## Phase 8 — Provider Abstraction `[PLANNED]`
+## Phase 8 — PC Control `[COMPLETE]`
 
-Enable swapping the LLM brain from Ollama to Claude or OpenAI.
+Nova can interact with the local machine, open Windows apps from WSL2, run commands, read/write files, query Claude Code about projects, and maintain per-project notes.
 
-**Files:**
-- `providers/base.py` — `LLMProvider` ABC (already specced in CLAUDE.md)
-- `providers/ollama_provider.py` — current default
-- `providers/claude_provider.py` — Anthropic API
-- `providers/openai_provider.py` — OpenAI API
+**Module:** `modules/pc_control/` package
 
-**Use cases:**
-- Fall back to Claude API when the local model is unavailable
-- Route complex reasoning tasks to a larger cloud model
-- A/B test response quality between providers
+**Tools registered:**
 
-**Config:** `config.yaml` `brain.provider: ollama | claude | openai` — hot-swappable without restart ideally.
+| Tool | Description |
+|------|-------------|
+| `pc_run_command` | Run allowlisted shell commands (Linux + Windows via WSL2) |
+| `pc_claude_code` | Send prompts to Claude Code CLI, target specific projects |
+| `pc_open_app` | Open Windows/Linux apps, files, or URLs (30+ app shortcuts) |
+| `pc_read_file` | Read local text files with size limits |
+| `pc_write_file` | Write/append to files in configured writable directories |
+| `pc_list_projects` | List registered development projects |
+| `pc_write_notes` | Save per-project development notes/checklists |
+| `pc_ask_project` | Ask any question about a project (checks notes + Claude Code) |
+
+**Safety:**
+- Command allowlist in `config.yaml` — only approved commands can run
+- Shell injection blocking: `;`, `|`, `&&`, `||`, `$()`, backticks, redirects
+- `asyncio.create_subprocess_exec` only — never `shell=True`
+- File writes restricted to configured writable directories
+- Expensive tool calls force the LLM to respond (prevents infinite tool chaining)
+
+**WSL2 integration:**
+- `cmd.exe /c start` fallback for opening Windows apps
+- Windows commands in allowlist: `powershell.exe`, `cmd.exe`, `ipconfig.exe`, etc.
+- `/mnt/c/Windows` as safe CWD for cmd.exe (avoids UNC path errors)
+
+**Project system:**
+- Projects defined in `config.yaml` with name, path, description
+- Fuzzy name matching (exact → case-insensitive → substring)
+- Per-project markdown notes in `data/notes/`
+- `pc_ask_project` combines notes + Claude Code in one tool call
+
+**Config:**
+```yaml
+modules:
+  pc_control: true
+  pc_control_allowed_commands: [ls, cat, ps, code, claude, powershell.exe, ...]
+  pc_control_writable_dirs: [~/Documents, ~/notes]
+  pc_control_command_timeout: 30
+
+projects:
+  nova:
+    path: ~/projects/Nova-AI-assistant-selfhosted
+    description: "Personal AI assistant"
+```
+
+**Tests:** 70 tests in `test_pc_control.py` + `test_pc_control_projects.py`
 
 ---
 
-## Phase 9 — PC Control `[PLANNED]`
+## Phase 9 — Claude Code Workflows `[PLANNED]`
 
-Let Nova interact with the local machine — run commands, control apps, and act as an agent that can operate your dev environment.
+Structured multi-step workflow system for Claude Code. Nova manages checklists of prompts, executes them one at a time with real-time output streaming, and maintains session continuity between steps.
 
-**Module:** `modules/pc_control.py`
+**Module:** `modules/cc_workflows/` package
 
-**Capabilities:**
-- Run shell commands from an explicit allowlist (safe, no arbitrary execution)
-- Send prompts to Claude Code via CLI (`claude -p "..."`) and return the response
-- Open applications or files
-- Read/write local files on request
-- Query running processes
+**Tools registered:**
 
-**Safety rules:**
-- Commands must be on a pre-approved allowlist in `config.yaml`
-- Destructive commands (rm, kill, etc.) require explicit confirmation before running
-- Never execute arbitrary strings from the LLM without allowlist validation
+| Tool | Description |
+|------|-------------|
+| `cc_workflow_create` | Create a new workflow for a project (title + project name) |
+| `cc_workflow_add_step` | Add a prompt/step to an existing workflow |
+| `cc_workflow_list` | List all workflows, optionally filtered by project |
+| `cc_workflow_view` | View a workflow's steps, prompts, and status |
+| `cc_workflow_run` | Execute the next pending step with real-time terminal output |
+| `cc_workflow_edit_step` | Edit a step's prompt before running it |
+| `cc_workflow_delete` | Delete a workflow |
 
-**Config:** `pc_control.allowed_commands` list in `config.yaml`
+**Key design decisions:**
 
-**Done when:** "Ask Claude Code to explain this function" and "open VS Code" work through Nova.
+| Decision | Rationale |
+|----------|-----------|
+| Real-time stdout streaming | Read Claude Code output line-by-line and print to terminal live, instead of waiting for completion |
+| Session continuity | Use `--continue` / `--resume` flags so each step builds on the previous Claude Code conversation |
+| JSON workflow files | Stored in `data/workflows/` (one per workflow, gitignored), keeps full prompt + output history |
+| Step status tracking | Each step transitions: `pending` → `running` → `done` / `failed` |
+
+**Example flow:**
+1. User: "Create a workflow for nova called 'add weather module'"
+2. User: "Add step: analyze the codebase and suggest how to add a weather module"
+3. User: "Add step: split the implementation into phases"
+4. User: "Add step: implement phase 1"
+5. User: "Run the next step" → Claude Code runs, output streams to terminal in real-time
+6. User reviews output, optionally edits upcoming step prompts
+7. User: "Run the next step" → continues the same Claude Code session
+
+**Storage:** `data/workflows/*.json` (gitignored)
+
+**Config:**
+```yaml
+modules:
+  cc_workflows: true
+```
+
+**Tests:** `tests/test_modules/test_cc_workflows.py`
+
+**Done when:** Nova can create a multi-step workflow, execute steps one at a time with live output, and maintain Claude Code session context between steps.
 
 ---
 
@@ -320,6 +382,7 @@ Give Nova a fully customizable personality layer — name, voice, tone, language
 
 These are not scheduled but worth keeping track of:
 
+- **Provider Abstraction** — Swap the LLM brain from Ollama to Claude or OpenAI. `providers/` package with `LLMProvider` ABC, `OllamaProvider`, `ClaudeProvider`, `OpenAIProvider`. Config: `brain.provider: ollama | claude | openai`. Use cases: cloud fallback, routing complex tasks to larger models, A/B testing response quality.
 - **Email (Gmail)** — Read recent emails, send with mandatory confirmation preview. Excluded from Phase 6 (Calendar) by design — highest privacy risk, revisit later.
 - **Smart Home** — Home Assistant REST API integration (lights, switches, scenes, sensors). Config: `HA_URL`, `HA_TOKEN`. Module: `modules/smart_home.py`. Skipped Phase 3 — no HA setup yet.
 - **File assistant** — read, summarize, and answer questions about local files (PDFs, text, code)
