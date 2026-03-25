@@ -67,6 +67,16 @@ nova/
 │   │   ├── queue.py         # SpotifyQueueModule, SpotifyViewQueueModule
 │   │   ├── playlists.py     # SpotifyMyPlaylistsModule
 │   │   └── lyrics_search.py # SpotifyLyricsSearchModule (Genius API)
+│   ├── cc_workflows/         # Claude Code workflow system (Phase 9)
+│   │   ├── __init__.py       # Re-exports all workflow module classes
+│   │   ├── _store.py         # Workflow JSON file persistence
+│   │   ├── create.py         # CCWorkflowCreateModule
+│   │   ├── add_step.py       # CCWorkflowAddStepModule
+│   │   ├── list.py           # CCWorkflowListModule
+│   │   ├── view.py           # CCWorkflowViewModule
+│   │   ├── run.py            # CCWorkflowRunModule (real-time streaming)
+│   │   ├── edit_step.py      # CCWorkflowEditStepModule
+│   │   └── delete.py         # CCWorkflowDeleteModule
 │   └── pc_control/          # PC control tools (Phase 8)
 │       ├── __init__.py      # Re-exports all module classes
 │       ├── _safety.py       # Allowlist validation, shell injection prevention, fuzzy project resolution
@@ -83,14 +93,16 @@ nova/
 │   └── google_auth.py       # Google Calendar service account connection test
 ├── data/
 │   ├── memory.db            # SQLite database (gitignored)
-│   └── notes/               # Project notes written by Nova (gitignored)
+│   ├── notes/               # Project notes written by Nova (gitignored)
+│   └── workflows/           # Workflow JSON files (gitignored)
 └── tests/
     ├── test_brain.py
     ├── test_memory.py
     ├── test_long_term_memory.py
     └── test_modules/
         ├── test_pc_control.py            # 51 tests for PC control modules
-        └── test_pc_control_projects.py   # 19 tests for project/notes modules
+        ├── test_pc_control_projects.py   # 19 tests for project/notes modules
+        └── test_cc_workflows.py          # 39 tests for workflow modules
 ```
 
 ## Module Contract
@@ -175,6 +187,16 @@ Nova can run shell commands, open Windows apps, read/write files, and delegate c
 - **Project registry**: The `projects:` top-level key in `config.yaml` maps project names to paths. `ListProjectsModule`, `AskProjectModule`, and `ClaudeCodeModule` resolve projects by fuzzy name match via `_safety.py`.
 - **Project notes**: Stored as Markdown files in `data/notes/` (one per project, gitignored). Nova reads/writes notes to remember project context across sessions.
 - **Command timeout**: Configurable via `modules.pc_control_command_timeout` (default 30s).
+
+## Claude Code Workflows (Phase 9)
+
+Nova manages multi-step Claude Code checklists with real-time output streaming and session continuity.
+
+- **Workflow storage**: JSON files in `data/workflows/` (one per workflow, gitignored)
+- **Real-time output**: `CCWorkflowRunModule` reads Claude Code stdout line-by-line, printing to terminal live
+- **Session continuity**: Uses `--continue` / `--resume` so each step builds on the previous Claude Code conversation
+- **Step lifecycle**: `pending` → `running` → `done` / `failed`
+- **Project integration**: Workflows are tied to registered projects from `config.yaml`
 
 ## When Compacting
 
