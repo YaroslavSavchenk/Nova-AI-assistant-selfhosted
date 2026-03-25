@@ -58,12 +58,12 @@ class CCWorkflowCreateModule(NovaModule):
             await save_workflow(wf)
 
             return (
-                f"Workflow created.\n"
+                f"Workflow created successfully.\n"
                 f"  ID: {wf['id']}\n"
                 f"  Title: {title}\n"
                 f"  Project: {resolved_key}\n"
                 f"  Path: {project_path}\n\n"
-                f"Add steps with cc_workflow_add_step using workflow_id '{wf['id']}'."
+                f"Tell the user the workflow was created and give them the ID."
             )
         except Exception as exc:
             logger.exception("cc_workflow_create failed")

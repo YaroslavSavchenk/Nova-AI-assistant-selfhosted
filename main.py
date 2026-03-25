@@ -41,7 +41,7 @@ from modules.research import NewsModule, WikipediaModule, SummarizeUrlModule  # 
 from modules.spotify import SpotifyPlayModule, SpotifyControlModule, SpotifyNowPlayingModule, SpotifyMyPlaylistsModule, SpotifyQueueModule, SpotifyViewQueueModule, SpotifySkipToModule, SpotifyLyricsSearchModule
 from modules.calendar import CalendarListEventsModule, CalendarCreateEventModule, CalendarDeleteEventModule
 from modules.memory import RememberFactModule, RecallFactsModule, ForgetFactModule
-from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule, ListProjectsModule, ProjectNotesReadModule, ProjectNotesWriteModule, AskProjectModule
+from modules.pc_control import RunCommandModule, ClaudeCodeModule, OpenAppModule, ReadFileModule, WriteFileModule, ListProjectsModule, ProjectNotesWriteModule, AskProjectModule
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +371,7 @@ async def main() -> None:
         tool_router.register(CCWorkflowAddStepModule())
         tool_router.register(CCWorkflowListModule())
         tool_router.register(CCWorkflowViewModule())
-        tool_router.register(CCWorkflowRunModule(projects=projects_cfg))
+        tool_router.register(CCWorkflowRunModule())
         tool_router.register(CCWorkflowEditStepModule())
         tool_router.register(CCWorkflowDeleteModule())
         logger.debug("Registered cc_workflows modules")

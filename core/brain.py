@@ -127,9 +127,17 @@ class OllamaProvider(LLMProvider):
             ]
             return LLMResponse(tool_calls=tool_calls)
 
-        # Strip <think>...</think> blocks that Qwen3 emits in thinking mode
+        # Strip <think>...</think> blocks that Qwen3 emits even with thinking off.
+        # Also handle corrupted/partial tags (e.g. unicode artifacts like 崧)
+        # and unclosed <think> blocks (strip everything from <think> to end).
         content = msg.content or ""
-        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        # Closed think blocks
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+        # Unclosed think block (Qwen3 sometimes forgets to close)
+        content = re.sub(r"<think>.*", "", content, flags=re.DOTALL)
+        # Strip common Qwen3 unicode artifacts before real content
+        content = content.lstrip("崧\n\r\t ")
+        content = content.strip()
         return LLMResponse(content=content)
 
 
@@ -383,13 +391,26 @@ class Brain:
         # to make the LLM chain more calls instead of responding. After one of
         # these returns, we force the LLM to produce a text response.
         _EXPENSIVE_TOOLS = {"pc_ask_project", "pc_claude_code", "cc_workflow_run"}
+        # Tools that should ALWAYS force a text response after completing,
+        # regardless of output size. Prevents the LLM from chaining actions
+        # (e.g. adding a workflow step then immediately executing it).
+        _STOP_AFTER_TOOLS = {
+            "cc_workflow_create", "cc_workflow_add_step",
+            "cc_workflow_delete", "cc_workflow_edit_step",
+        }
         _completed_expensive: dict[tuple[str, str], str] = {}
         _EXPENSIVE_RESULT_THRESHOLD = 500
+        _force_text_next = False  # When True, next LLM call omits tools
 
         for iteration in range(_MAX_TOOL_ITERATIONS):
+            # When forcing text, omit tool definitions so the LLM focuses
+            # on the conversation instead of being distracted by 30+ schemas.
+            iter_tools = None if _force_text_next else (tools or None)
+            _force_text_next = False
+
             response = await self._provider.chat(
                 messages=messages,
-                tools=tools or None,
+                tools=iter_tools,
                 thinking=self._thinking,
             )
 
@@ -470,9 +491,27 @@ class Brain:
                         force_text = True
                         break
 
+                    # Stop-after tools: always force text response.
+                    # Prevents chaining (e.g. add step then execute it).
+                    if tool_name in _STOP_AFTER_TOOLS:
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Tell the user what happened based on the tool "
+                                    "result above. Do NOT call any more tools."
+                                ),
+                            }
+                        )
+                        force_text = True
+                        break
+
                 if force_text:
                     # Continue the outer loop so the LLM gets another chance
                     # to produce a text response instead of re-calling a tool.
+                    # Omit tool definitions next iteration so the LLM focuses
+                    # on the conversation, not 30+ tool schemas.
+                    _force_text_next = True
                     continue
             else:
                 # Final text response

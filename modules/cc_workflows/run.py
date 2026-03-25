@@ -54,9 +54,8 @@ class CCWorkflowRunModule(NovaModule):
         "required": ["workflow_id"],
     }
 
-    def __init__(self, timeout: int = 300, projects: dict | None = None) -> None:
+    def __init__(self, timeout: int = 300) -> None:
         self.timeout = timeout
-        self.projects = projects or {}
 
     async def run(self, **kwargs) -> str:
         wf_id: str = kwargs.get("workflow_id", "").strip()

@@ -11,8 +11,9 @@ logger = logging.getLogger(__name__)
 class CCWorkflowAddStepModule(NovaModule):
     name: str = "cc_workflow_add_step"
     description: str = (
-        "Add a new step (Claude Code prompt) to an existing workflow. "
-        "Steps are executed in order. Optionally insert at a specific position."
+        "Add a step to a Claude Code workflow. The 'prompt' parameter is the "
+        "instruction that Claude Code will execute. Use the workflow_id from "
+        "cc_workflow_create. When the user says 'add a step: do X', pass 'do X' as the prompt."
     )
     parameters: dict = {
         "type": "object",
@@ -71,7 +72,9 @@ class CCWorkflowAddStepModule(NovaModule):
             total = len(steps)
             return (
                 f"Step {step_num} added to workflow '{wf_id}' ({total} total steps).\n"
-                f"  Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}"
+                f"  Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}\n\n"
+                f"[Step queued only — do NOT execute it now. "
+                f"Tell the user the step was added and stop.]"
             )
         except Exception as exc:
             logger.exception("cc_workflow_add_step failed")

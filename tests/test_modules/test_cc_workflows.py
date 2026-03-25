@@ -85,7 +85,7 @@ def view_mod():
 
 @pytest.fixture
 def run_mod():
-    return CCWorkflowRunModule(timeout=10, projects=PROJECTS)
+    return CCWorkflowRunModule(timeout=10)
 
 
 @pytest.fixture

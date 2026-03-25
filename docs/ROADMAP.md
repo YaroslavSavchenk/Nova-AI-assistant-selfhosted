@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 9 next — Persona
+## Current status: Phase 9 next — Claude Code Workflows
 
 ---
 
@@ -307,7 +307,57 @@ projects:
 
 ---
 
-## Phase 9 — Persona `[PLANNED]`
+## Phase 9 — Claude Code Workflows `[PLANNED]`
+
+Structured multi-step workflow system for Claude Code. Nova manages checklists of prompts, executes them one at a time with real-time output streaming, and maintains session continuity between steps.
+
+**Module:** `modules/cc_workflows/` package
+
+**Tools registered:**
+
+| Tool | Description |
+|------|-------------|
+| `cc_workflow_create` | Create a new workflow for a project (title + project name) |
+| `cc_workflow_add_step` | Add a prompt/step to an existing workflow |
+| `cc_workflow_list` | List all workflows, optionally filtered by project |
+| `cc_workflow_view` | View a workflow's steps, prompts, and status |
+| `cc_workflow_run` | Execute the next pending step with real-time terminal output |
+| `cc_workflow_edit_step` | Edit a step's prompt before running it |
+| `cc_workflow_delete` | Delete a workflow |
+
+**Key design decisions:**
+
+| Decision | Rationale |
+|----------|-----------|
+| Real-time stdout streaming | Read Claude Code output line-by-line and print to terminal live, instead of waiting for completion |
+| Session continuity | Use `--continue` / `--resume` flags so each step builds on the previous Claude Code conversation |
+| JSON workflow files | Stored in `data/workflows/` (one per workflow, gitignored), keeps full prompt + output history |
+| Step status tracking | Each step transitions: `pending` → `running` → `done` / `failed` |
+
+**Example flow:**
+1. User: "Create a workflow for nova called 'add weather module'"
+2. User: "Add step: analyze the codebase and suggest how to add a weather module"
+3. User: "Add step: split the implementation into phases"
+4. User: "Add step: implement phase 1"
+5. User: "Run the next step" → Claude Code runs, output streams to terminal in real-time
+6. User reviews output, optionally edits upcoming step prompts
+7. User: "Run the next step" → continues the same Claude Code session
+
+**Storage:** `data/workflows/*.json` (gitignored)
+
+**Config:**
+```yaml
+modules:
+  cc_workflows: true
+```
+
+**Tests:** `tests/test_modules/test_cc_workflows.py`
+
+**Done when:** Nova can create a multi-step workflow, execute steps one at a time with live output, and maintain Claude Code session context between steps.
+
+---
+
+## Phase 10 — Persona `[PLANNED]`
 
 Give Nova a fully customizable personality layer — name, voice, tone, language defaults, and behavioral traits.
 
