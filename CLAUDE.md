@@ -102,7 +102,7 @@ nova/
     └── test_modules/
         ├── test_pc_control.py            # 51 tests for PC control modules
         ├── test_pc_control_projects.py   # 19 tests for project/notes modules
-        └── test_cc_workflows.py          # 39 tests for workflow modules
+        └── test_cc_workflows.py          # 39 tests for cc_workflow modules
 ```
 
 ## Module Contract
@@ -197,6 +197,12 @@ Nova manages multi-step Claude Code checklists with real-time output streaming a
 - **Session continuity**: Uses `--continue` / `--resume` so each step builds on the previous Claude Code conversation
 - **Step lifecycle**: `pending` → `running` → `done` / `failed`
 - **Project integration**: Workflows are tied to registered projects from `config.yaml`
+
+**Known limitations:**
+- Qwen 3 14B struggles to retain workflow IDs across conversation turns with 36 tools registered
+- Users currently need to provide workflow IDs explicitly for reliable operation
+- `_STOP_AFTER_TOOLS` in `brain.py` prevents tool chaining after workflow mutations
+- `_force_text_next` flag omits tool definitions when forcing text response
 
 ## When Compacting
 

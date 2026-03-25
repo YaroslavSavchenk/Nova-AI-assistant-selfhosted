@@ -4,7 +4,7 @@
 
 ---
 
-## Current status: Phase 9 next — Claude Code Workflows
+## Current status: Phase 9 in progress — Claude Code Workflows
 
 ---
 
@@ -307,7 +307,7 @@ projects:
 
 ---
 
-## Phase 9 — Claude Code Workflows `[PLANNED]`
+## Phase 9 — Claude Code Workflows `[IN PROGRESS]`
 
 Structured multi-step workflow system for Claude Code. Nova manages checklists of prompts, executes them one at a time with real-time output streaming, and maintains session continuity between steps.
 
@@ -354,6 +354,11 @@ modules:
 **Tests:** `tests/test_modules/test_cc_workflows.py`
 
 **Done when:** Nova can create a multi-step workflow, execute steps one at a time with live output, and maintain Claude Code session context between steps.
+
+**Remaining work:**
+- Active workflow tracking — Nova should remember the current workflow ID so the user doesn't have to repeat it every command
+- Eventually remove the need for users to specify workflow IDs entirely (auto-resolve from context)
+- Improve Qwen 3 tool-calling reliability with 36+ registered tools
 
 ---
 
