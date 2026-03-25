@@ -360,6 +360,22 @@ async def main() -> None:
         tool_router.register(AskProjectModule(projects=projects_cfg, notes_dir="data/notes"))
         logger.debug("Registered pc_control modules")
 
+    if modules_cfg.get("cc_workflows", False):
+        from modules.cc_workflows import (
+            CCWorkflowCreateModule, CCWorkflowAddStepModule,
+            CCWorkflowListModule, CCWorkflowViewModule,
+            CCWorkflowRunModule, CCWorkflowEditStepModule,
+            CCWorkflowDeleteModule,
+        )
+        tool_router.register(CCWorkflowCreateModule(projects=projects_cfg))
+        tool_router.register(CCWorkflowAddStepModule())
+        tool_router.register(CCWorkflowListModule())
+        tool_router.register(CCWorkflowViewModule())
+        tool_router.register(CCWorkflowRunModule(projects=projects_cfg))
+        tool_router.register(CCWorkflowEditStepModule())
+        tool_router.register(CCWorkflowDeleteModule())
+        logger.debug("Registered cc_workflows modules")
+
     brain = Brain(
         config=config,
         memory=memory,

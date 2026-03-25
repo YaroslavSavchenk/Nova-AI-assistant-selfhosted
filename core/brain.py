@@ -146,6 +146,7 @@ _TOOL_STATUS: dict[str, str] = {
     "wikipedia_lookup": "Looking up Wikipedia...",
     "summarize_url": "Reading URL...",
     "news_headlines": "Fetching news...",
+    "cc_workflow_run": "Running workflow step...",
 }
 
 
@@ -381,7 +382,7 @@ class Brain:
         # Tools that produce large results (Claude Code, project queries) tend
         # to make the LLM chain more calls instead of responding. After one of
         # these returns, we force the LLM to produce a text response.
-        _EXPENSIVE_TOOLS = {"pc_ask_project", "pc_claude_code"}
+        _EXPENSIVE_TOOLS = {"pc_ask_project", "pc_claude_code", "cc_workflow_run"}
         _completed_expensive: dict[tuple[str, str], str] = {}
         _EXPENSIVE_RESULT_THRESHOLD = 500
 
